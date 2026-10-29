@@ -44,6 +44,13 @@ function preview_to_input(p, url)
 	};
 }
 
+function hint_label(n)
+{
+	if (n === 0)
+		return "Vorschau";
+	return n === 1 ? "1 Hinweis" : n + " Hinweise";
+}
+
 function preview_head(p)
 {
 	const warnings = p.warnings || [];
@@ -51,9 +58,7 @@ function preview_head(p)
 		h("p", { class: "preview-head" },
 			h("span", { class: "method" },
 				METHOD_LABEL[p.method] || p.method),
-			h("span", {}, warnings.length === 1 ? "1 Hinweis"
-				: warnings.length ? warnings.length + " Hinweise"
-				: "Vorschau")),
+			h("span", {}, hint_label(warnings.length))),
 		warnings.length
 			? h("ul", { class: "warnings" },
 				warnings.map(w => h("li", {}, w)))
