@@ -15,7 +15,9 @@ Rezepte erfassen, bearbeiten, löschen; Filter nach Kategorie, Tags,
 Zutaten, Text; Original und eigene Version je Rezept; Kochmodus
 (Bildschirm bleibt an); Notizen; «gekocht am» mit Sternen; Fotos; Export
 als ZIP (Menü «⋯»); Import per URL (schema.org, sonst geraten) mit
-Vorschau; Zutaten als Text einfügen.
+Vorschau; Zutaten als Text einfügen; Portionen umrechnen; Timer in
+Schritten; Nährwerte; Einkaufsliste mit Vorräten, nach Microsoft To Do;
+Teilen per Link; Buchseite per Foto; Teilen aus dem Handy-Browser.
 
 ## Installation
 
@@ -78,6 +80,63 @@ Anmeldung gilt `SESSION_DAYS` Tage (30). Startbildschirm nur über HTTPS:
 
 - iPhone, Safari: Teilen, «Zum Home-Bildschirm»
 - Android, Chrome: Menü, «App installieren»
+
+## Aus dem Handy-Browser speichern
+
+Android, App installiert (siehe «Handy»): Teilen, «Rezepte».
+
+iPhone, App «Kurzbefehle»:
+
+1. «+», Name «Rezept speichern».
+2. «i», «Im Teilen-Menü anzeigen» ein, Eingabetyp nur «URLs».
+3. Aktion «URL codieren» mit «Kurzbefehl-Eingabe».
+4. Aktion «URL öffnen»: `https://DOMAIN/#/import?url=`, dahinter das
+   Ergebnis von Schritt 3.
+5. Safari: Teilen, «Rezept speichern».
+
+## Microsoft To Do
+
+Einmal im [Entra admin center](https://entra.microsoft.com):
+
+1. «App registrations», «New registration».
+2. Kontotyp: persönliche Konten und Konten jeder Organisation.
+3. Plattform «Mobile and desktop applications»; Redirect leer lassen,
+   sonst `https://login.microsoftonline.com/common/oauth2/nativeclient`.
+4. «Authentication», «Allow public client flows»: Yes.
+5. «API permissions», «Microsoft Graph», «Delegated», `Tasks.ReadWrite`.
+
+Kein Client Secret. «Application (client) ID» als `MS_CLIENT_ID` in
+`.env`:
+
+```bash
+docker compose up -d api
+```
+
+```bash
+docker compose exec api python -m app.cli todo-login
+```
+
+Zeigt Adresse und Code für die Anmeldung im Browser.
+
+Die Einkaufsliste legt offene Einträge in der To-Do-Liste `TODO_LIST`
+(`Einkauf`) an, vorhandene Titel nicht nochmals. Zutaten unter
+`#/pantry` (Salz, Öl, …) kommen nicht auf die Einkaufsliste.
+
+## Teilen
+
+Je Rezept ein Link ohne Login auf die eigene Version mit Fotos;
+Original, Notizen und Kochlog bleiben privat. «Link löschen» beendet
+den Zugriff.
+
+## Buchseite fotografieren
+
+Im Import: Foto der Seite, Texterkennung (tesseract, Deutsch und
+Englisch) füllt das Formular; Buch und Seite von Hand eintragen.
+
+## Nährwerte
+
+Pro Portion: kcal, Eiweiss, Kohlenhydrate, Fett. Im Formular; beim
+Import übernommen, wenn die Seite sie liefert.
 
 ## Betrieb
 

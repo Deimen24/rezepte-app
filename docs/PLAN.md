@@ -259,7 +259,81 @@ Speichern läuft über das bestehende `POST /api/recipes` mit
   «Zutaten einfügen» im Formular.
 - Offen: Stack-Start beim Betreiber, Test mit echten Rezeptseiten.
 
-## Spätere Phasen (nicht gebaut)
-Timer aus Schritten, Share Target (Android) und iOS-Kurzbefehl auf
-`#/import?url=`, Portionen umrechnen, Einkaufsliste nach Microsoft
-To Do, Kochbuchseiten per Foto, Teilen einzelner Rezepte, Nährwerte.
+## Spätere Phasen (gebaut, Stack-Start auf dem Server offen)
+
+### Dateien
+    backend/migrations/versions/0002_later_phases.py
+    backend/app/models.py                share_token, Nährwerte,
+                                         ShoppingItem, PantryItem,
+                                         Integration
+    backend/app/schemas.py               Nutrition, ShareOut,
+                                         SharedRecipe, ShoppingItemIn/Out,
+                                         ShoppingFromRecipeIn, CheckedIn,
+                                         PantryIn/Out, TodoStatus,
+                                         TodoPushOut
+    backend/app/config.py                MS_CLIENT_ID, MS_TENANT, TODO_LIST
+    backend/app/cli.py                   todo-login (Device Code Flow)
+    backend/app/services/{share,shopping,pantry,todo,ocr}.py
+    backend/app/routers/{share,shopping,pantry,todo}.py
+    backend/app/routers/importer.py      + /import/photo
+    backend/app/routers/media.py         + Fotos geteilter Rezepte
+    backend/app/importer/ocr.py          tesseract, Text in Abschnitte
+    backend/app/importer/jsonld.py       + nutrition
+    backend/Dockerfile                   tesseract-ocr deu/eng
+    backend/tests/test_{nutrition,share,shopping,pantry,todo,ocr,cli,
+                        migration,api_contract}.py
+    frontend/site/scale.js               Portionen, Timer, Stepper
+    frontend/site/form.js                Formular, Nährwerte
+    frontend/site/cook.js                Timer, Portionen
+    frontend/site/import.js              Foto, #/import?url=
+    frontend/site/app.js, api.js, style.css, sw.js
+    frontend/site/manifest.webmanifest   share_target
+
+### Tabellen (Migration 0002)
+| Tabelle | Spalten |
+|---------|---------|
+| recipes | + share_token (unique, null) |
+| recipe_versions | + kcal, protein_g, carbs_g, fat_g (numeric 8,1, null) |
+| shopping_items | id, name, unit, amount, note, checked, recipe_id→recipes (SET NULL), created_at |
+| pantry | id, name (unique); Vorgaben Salz, Pfeffer, Olivenöl, Öl, Wasser, Zucker, Mehl, Butter, Essig |
+| integrations | id, name (unique), data (JSON), updated_at; `todo` = Tokens |
+
+### Endpunkte
+| Methode | Pfad | Zweck |
+|---------|------|-------|
+| GET/POST/DELETE | /api/recipes/{id}/share | `{token, path}`; Link erzeugen (idempotent), löschen |
+| GET | /api/share/{token} | ohne Login: SharedRecipe (title, category, tags, own, photos) |
+| GET | /share/{token}/photos/{pid}.jpg | ohne Login, nur Fotos des Rezepts |
+| GET/POST | /api/shopping | Liste / `{name, unit, amount, note}` |
+| POST | /api/shopping/from-recipe/{id} | `{factor}`; eigene Version, Mengen skaliert, gleiche Zeilen zusammengeführt, Vorräte übersprungen |
+| PUT | /api/shopping/{iid} | Zeile ersetzen |
+| PUT | /api/shopping/{iid}/checked | `{checked}` |
+| DELETE | /api/shopping/{iid}, /api/shopping/checked | eine Zeile / alle abgehakten |
+| GET/POST | /api/pantry | Liste / `{name}` |
+| DELETE | /api/pantry/{pid} | 204 |
+| GET | /api/todo/status | `{configured, logged_in, list_name}` |
+| POST | /api/todo/push | offene Zeilen als Aufgaben nach `TODO_LIST`; `{added, skipped}`, 422 mit Grund |
+| POST | /api/import/photo | multipart `file` → ImportPreview, method `ocr`, source none |
+
+### Je Funktion
+- Portionen: `scale.js`, Stepper in Detail und Kochmodus, Stand je
+  Rezept in `sessionStorage`; Brüche ¼ ⅓ ½ ⅔ ¾.
+- Timer: Zeitangaben im Schritttext («10 Min», «1 h 30 min») werden
+  Knöpfe im Kochmodus, max. 3 je Schritt; laufen nur in der Ansicht.
+- Nährwerte: pro Portion auf der Version; JSON-LD `nutrition`
+  (calories, proteinContent, carbohydrateContent, fatContent).
+- Einkaufsliste: Zusammenführen nach Name und Einheit (normalisiert),
+  nur offene Zeilen; Vorräte nach ganzem Namen oder Wort.
+- To Do: OAuth Device Code, httpx ohne MSAL, Tokens in `integrations`;
+  Liste wird angelegt, Duplikate nach Titel (offene Aufgaben).
+- OCR: Graustufen, max. 2500 px, `tesseract -l deu+eng --psm 4`;
+  Titel, Zutaten, Schritte nach Schlüsselzeilen, sonst geraten.
+- Teilen: Token 32 Byte urlsafe, Pfad `/#/s/TOKEN`; nur `own`.
+- Share Target: `manifest.webmanifest` → `/share`, weiter zu
+  `#/import?url=`; iOS über Kurzbefehl (README).
+
+### Stand 29.10.
+- 755 Backend-Tests grün; Oberfläche in Playwright geprüft.
+- Offen: Stack-Start beim Betreiber, Docker-Build mit tesseract,
+  echter To-Do-Lauf gegen Microsoft Graph, Share Target auf einem
+  echten Android.
