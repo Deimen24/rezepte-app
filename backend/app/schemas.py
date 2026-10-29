@@ -250,3 +250,46 @@ class RecipeListItem(BaseModel):
 	cooked_count: int
 	last_cooked: date | None
 	updated_at: datetime
+
+
+IMPORT_URL_MAX = 2000
+INGREDIENT_LINES_MAX = 200
+
+
+class ImportIn(BaseModel):
+	url: str = Field(min_length=1, max_length=IMPORT_URL_MAX)
+
+	@field_validator("url", mode="before")
+	@classmethod
+	def strip_text(cls, value):
+		return value.strip() if isinstance(value, str) else value
+
+
+class ParsedIngredient(IngredientIn):
+	raw: str
+
+
+class ImportVersion(BaseModel):
+	title: str
+	intro: str = ""
+	servings: int | None = None
+	prep_minutes: int | None = None
+	cook_minutes: int | None = None
+	ingredients: list[ParsedIngredient]
+	steps: list[StepIn]
+
+
+class ImportPreview(BaseModel):
+	source: Source
+	version: ImportVersion
+	image_url: str | None
+	method: Literal["jsonld", "heuristic"]
+	warnings: list[str]
+
+
+class IngredientLinesIn(BaseModel):
+	lines: list[str] = Field(max_length=INGREDIENT_LINES_MAX)
+
+
+class PhotoUrlIn(BaseModel):
+	url: str = Field(min_length=1, max_length=IMPORT_URL_MAX)
