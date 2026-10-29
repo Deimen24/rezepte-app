@@ -1,6 +1,6 @@
 # Plan und Stand
 
-## Phase 1 – Fundament (in Arbeit)
+## Phase 1 – Fundament (gebaut, Stack-Start auf dem Server offen)
 
 ### Dateien
     compose.yaml, compose.dev.yaml, .env.example, README.md, CLAUDE.md

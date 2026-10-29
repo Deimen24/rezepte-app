@@ -10,8 +10,14 @@ def _root() -> Path:
 
 
 def media_path(name: str) -> Path:
-	"""Resolve a media file name below media_dir, reject traversal."""
+	"""Resolve a plain file name below media_dir.
+
+	The store is flat: a name with a directory part ("a/b"), an
+	empty name or any traversal ("../x") is rejected.
+	"""
 	root = _root()
+	if not name or Path(name).name != name:
+		raise ValueError("invalid media name: " + name)
 	path = (root / name).resolve()
 	if path == root or root not in path.parents:
 		raise ValueError("invalid media name: " + name)
