@@ -190,3 +190,20 @@ export function export_url()
 {
 	return API_BASE + "/export";
 }
+
+/* -> ImportPreview; saves nothing */
+export function import_fetch(url)
+{
+	return api("POST", "/import/fetch", { url });
+}
+
+/* lines: [str] -> [{amount, unit, name, note, raw}] */
+export function parse_ingredients(lines)
+{
+	return api("POST", "/import/ingredients", { lines });
+}
+
+export function add_photo_from_url(id, url)
+{
+	return api("POST", recipe_path(id, "/photos/url"), { url });
+}

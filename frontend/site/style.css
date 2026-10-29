@@ -286,6 +286,22 @@ fieldset {
 	display: none !important;
 }
 
+.btn-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-bottom: 8px;
+}
+
+/* Pasted ingredient lines */
+.paste {
+	margin-bottom: var(--gap);
+}
+
+.paste textarea {
+	margin-bottom: 8px;
+}
+
 /* Filters */
 .filters {
 	display: flex;
@@ -744,6 +760,78 @@ fieldset {
 	flex: 1 1 0;
 	min-height: 56px;
 	font-size: 1.1rem;
+}
+
+/* Import */
+.import-form .row {
+	align-items: flex-end;
+}
+
+.import-form .row > button {
+	flex: 0 0 auto;
+}
+
+.import-form label {
+	margin: 0;
+}
+
+.spinner {
+	display: inline-block;
+	width: 1em;
+	height: 1em;
+	margin-right: 8px;
+	border: 2px solid currentColor;
+	border-right-color: transparent;
+	border-radius: 50%;
+	animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+.preview-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 4px 10px;
+	color: var(--fg-muted);
+	margin: var(--gap) 0 8px;
+}
+
+.preview-head .method {
+	font-weight: 600;
+	color: var(--fg);
+}
+
+.warnings {
+	margin: 0 0 var(--gap);
+	padding-left: 1.2rem;
+	color: var(--fg-muted);
+	font-size: 0.9rem;
+}
+
+.warnings li {
+	padding: 2px 0;
+}
+
+.preview-img {
+	margin: 0 0 var(--gap);
+}
+
+.preview-img img {
+	display: block;
+	width: 100%;
+	max-height: 200px;
+	object-fit: cover;
+	border-radius: var(--radius);
+	background: var(--line);
+}
+
+.preview-img .check {
+	margin-top: 4px;
 }
 
 /* Login */

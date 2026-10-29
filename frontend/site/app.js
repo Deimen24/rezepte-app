@@ -2,25 +2,24 @@
  * Recipe app: hash router and views. No framework, no build step.
  *
  * Routes: #/login, #/ (list), #/recipe/ID, #/new, #/edit/ID,
- * #/cook/ID (cook.js). All user text is rendered through h() /
- * textContent, never innerHTML.
+ * #/cook/ID (cook.js), #/import (import.js). All user text is
+ * rendered through h() / textContent, never innerHTML. DOM helpers
+ * and the recipe form live in form.js.
  */
 
 import * as API from "./api.js";
 import { view_cook } from "./cook.js";
+import { view_import } from "./import.js";
+import {
+	h, toast, error_msg, field, back_button, topbar, str, fmt_amount,
+	split_csv, empty_input, recipe_to_input, recipe_form,
+} from "./form.js";
 
-const TOAST_MS = 4000;
 const DEBOUNCE_MS = 300;
 const LOADING_DELAY_MS = 150;
-const NEW_CATEGORY = "__new__";
 const RATING_MAX = 5;
 /* Hash suffix set by cooking mode: open the cook-log form. */
 const COOKED_FLAG = "?cooked";
-const SOURCE_KINDS = [
-	["url", "Link"],
-	["book", "Buch"],
-	["none", "Keine"],
-];
 
 const state = {
 	user: null,
@@ -43,47 +42,16 @@ const ROUTES = [
 	[/^#\/recipe\/(\d+)(\?cooked)?$/, view_detail],
 	[/^#\/new$/, view_form],
 	[/^#\/edit\/(\d+)$/, view_form],
+	[/^#\/import(?:\?(.*))?$/, view_import_route],
 	[/^#\/cook\/(\d+)$/, (id) => view_cook(id, {
 		h: h, navigate: navigate, ingredient_text: ingredient_text })],
 ];
 
 let render_seq = 0;
-let toast_timer = null;
 
 /* ------------------------------------------------------------------ */
 /* DOM helpers                                                         */
 /* ------------------------------------------------------------------ */
-
-/*
- * h(tag, attrs, ...children): create an element. Attributes starting
- * with "on" become event listeners, children may be nodes, strings,
- * arrays or null.
- */
-function h(tag, attrs, ...children)
-{
-	const el = document.createElement(tag);
-	for (const [k, v] of Object.entries(attrs || {})) {
-		if (k.startsWith("on") && typeof v === "function")
-			el.addEventListener(k.slice(2), v);
-		else if (k === "class")
-			el.className = v;
-		else if (v === true)
-			el.setAttribute(k, "");
-		else if (v !== false && v !== null && v !== undefined)
-			el.setAttribute(k, v);
-	}
-	append(el, children);
-	return el;
-}
-
-function append(el, children)
-{
-	for (const c of children.flat(Infinity)) {
-		if (c === null || c === undefined || c === false)
-			continue;
-		el.append(c instanceof Node ? c : String(c));
-	}
-}
 
 function show(el, keep_scroll)
 {
@@ -93,21 +61,6 @@ function show(el, keep_scroll)
 		window.scrollTo(0, 0);
 }
 
-function toast(msg, is_error)
-{
-	const t = document.getElementById("toast");
-	t.textContent = msg;
-	t.className = is_error ? "error" : "";
-	t.hidden = false;
-	clearTimeout(toast_timer);
-	toast_timer = setTimeout(() => { t.hidden = true; }, TOAST_MS);
-}
-
-function error_msg(e)
-{
-	return e && e.message ? e.message : "Unbekannter Fehler";
-}
-
 function debounce(fn, ms)
 {
 	let timer = null;
@@ -115,23 +68,6 @@ function debounce(fn, ms)
 		clearTimeout(timer);
 		timer = setTimeout(() => fn(...args), ms);
 	};
-}
-
-function field(label, input)
-{
-	return h("label", {}, h("span", {}, label), input);
-}
-
-function back_button(href)
-{
-	return h("a", { class: "btn btn-icon", href: href,
-			"aria-label": "Zurück" }, "‹");
-}
-
-function topbar(title, ...actions)
-{
-	return h("header", { class: "topbar" },
-		h("h1", {}, title), ...actions);
 }
 
 /*
@@ -159,19 +95,6 @@ function menu(...items)
 /* ------------------------------------------------------------------ */
 /* Formatting                                                          */
 /* ------------------------------------------------------------------ */
-
-/*
- * Amounts come back as decimal strings ("250.000"); drop the noise.
- */
-function fmt_amount(a)
-{
-	if (a === null || a === undefined || a === "")
-		return "";
-	const s = String(a);
-	if (!/^-?\d+(\.\d+)?$/.test(s))
-		return s;
-	return s.replace(/\.?0+$/, "").replace(/\.(\d*[1-9])0+$/, ".$1");
-}
 
 function fmt_minutes(n)
 {
@@ -203,11 +126,6 @@ function stars_text(n)
 	if (!n)
 		return "";
 	return "★".repeat(n) + "☆".repeat(RATING_MAX - n);
-}
-
-function str(v)
-{
-	return v === null || v === undefined ? "" : String(v);
 }
 
 function pressed(on)
@@ -337,7 +255,7 @@ async function load_taxonomy()
 	state.tags = tags || [];
 }
 
-function category_options(selected, with_new, empty_label)
+function category_options(selected, empty_label)
 {
 	const opts = [h("option", { value: "" }, empty_label)];
 	const sel = String(selected);
@@ -345,9 +263,6 @@ function category_options(selected, with_new, empty_label)
 		opts.push(h("option", { value: c.id,
 					selected: String(c.id) === sel },
 				c.name));
-	if (with_new)
-		opts.push(h("option", { value: NEW_CATEGORY },
-				"+ neue Kategorie …"));
 	return opts;
 }
 
@@ -364,11 +279,6 @@ function filter_params()
 		ingredients: split_csv(filter.ingredients).join(","),
 		favorite: filter.favorite ? "true" : "",
 	};
-}
-
-function split_csv(s)
-{
-	return s.split(",").map(x => x.trim()).filter(x => x !== "");
 }
 
 function star()
@@ -447,7 +357,7 @@ function filter_bar(on_change)
 	const cat = h("select", { "aria-label": "Kategorie", onchange: (ev) => {
 		filter.category = ev.target.value;
 		on_change();
-	} }, category_options(filter.category, false, "Alle Kategorien"));
+	} }, category_options(filter.category, "Alle Kategorien"));
 	const ing = h("input", { placeholder: "Zutaten: Kürbis, Feta",
 				 "aria-label": "Zutaten",
 				 value: filter.ingredients,
@@ -482,6 +392,7 @@ async function view_list()
 		topbar("Rezepte",
 			h("a", { class: "btn btn-primary", href: "#/new" },
 				"+ Neu"),
+			h("a", { class: "btn", href: "#/import" }, "Import"),
 			menu(h("a", { href: API.export_url(),
 				      download: "rezepte.zip" }, "Export"),
 			     h("button", { type: "button", onclick: logout },
@@ -886,227 +797,6 @@ async function view_detail(id)
 /* Form (new and edit)                                                 */
 /* ------------------------------------------------------------------ */
 
-function empty_input()
-{
-	return {
-		category_id: null,
-		tags: [],
-		favorite: false,
-		source: { kind: "none", url: "", book: "", page: null },
-		version: {
-			title: "", intro: "", servings: null,
-			prep_minutes: null, cook_minutes: null,
-			ingredients: [], steps: [],
-		},
-	};
-}
-
-function recipe_to_input(r)
-{
-	return {
-		category_id: r.category ? r.category.id : null,
-		tags: r.tags || [],
-		favorite: !!r.favorite,
-		source: r.source || { kind: "none", url: "", book: "",
-				      page: null },
-		version: r.own,
-	};
-}
-
-function move_item(item, dir)
-{
-	const sib = dir < 0 ? item.previousElementSibling
-			    : item.nextElementSibling;
-	if (!sib)
-		return;
-	if (dir < 0)
-		sib.before(item);
-	else
-		sib.after(item);
-}
-
-function item_controls(item)
-{
-	return h("div", { class: "ctl" },
-		h("button", { type: "button", "aria-label": "Nach oben",
-			      onclick: () => move_item(item, -1) }, "↑"),
-		h("button", { type: "button", "aria-label": "Nach unten",
-			      onclick: () => move_item(item, 1) }, "↓"),
-		h("button", { type: "button", "aria-label": "Entfernen",
-			      class: "btn-danger",
-			      onclick: () => item.remove() }, "✕"));
-}
-
-function text_input(f, label, value, cls)
-{
-	return h("input", { class: cls, "data-f": f, placeholder: label,
-			    "aria-label": label, value: str(value) });
-}
-
-function ingredient_row(i)
-{
-	const item = h("div", { class: "ing-item" });
-	const amount = text_input("amount", "Menge", fmt_amount(i.amount),
-				  "narrow");
-	amount.setAttribute("inputmode", "decimal");
-	append(item, [
-		h("div", { class: "row" },
-			amount,
-			text_input("unit", "Einheit", i.unit, "narrow"),
-			text_input("name", "Zutat", i.name, "wide")),
-		h("div", { class: "row" },
-			text_input("note", "Notiz", i.note, ""),
-			item_controls(item)),
-	]);
-	return item;
-}
-
-function step_row(s)
-{
-	const item = h("div", { class: "step-item" });
-	const ta = h("textarea", { "data-f": "text", rows: 3,
-				   placeholder: "Schritt",
-				   "aria-label": "Schritt" }, str(s.text));
-	append(item, [h("div", { class: "row" }, ta, item_controls(item))]);
-	return item;
-}
-
-function read_field(item, name)
-{
-	return item.querySelector("[data-f=\"" + name + "\"]").value.trim();
-}
-
-function read_ingredients(box)
-{
-	const out = [];
-	for (const item of box.children) {
-		const name = read_field(item, "name");
-		if (name === "")
-			continue;
-		const amount = read_field(item, "amount").replace(",", ".");
-		out.push({
-			amount: amount === "" ? null : amount,
-			unit: read_field(item, "unit"),
-			name: name,
-			note: read_field(item, "note"),
-		});
-	}
-	return out;
-}
-
-function read_steps(box)
-{
-	const out = [];
-	for (const item of box.children) {
-		const text = read_field(item, "text");
-		if (text !== "")
-			out.push({ text: text });
-	}
-	return out;
-}
-
-function int_or_null(s)
-{
-	const t = String(s).trim();
-	return t === "" ? null : parseInt(t, 10);
-}
-
-function number_input(name, value, extra)
-{
-	return h("input", Object.assign({ name: name, type: "number",
-					  min: 0, step: 1, inputmode: "numeric",
-					  value: str(value) }, extra || {}));
-}
-
-function source_fields(src)
-{
-	const url = h("input", { name: "source_url", type: "url",
-				 placeholder: "https://…",
-				 inputmode: "url", value: src.url || "" });
-	const book = h("input", { name: "source_book",
-				  placeholder: "Buchtitel",
-				  value: src.book || "" });
-	const page = h("input", { name: "source_page", placeholder: "Seite",
-				  inputmode: "numeric", value: str(src.page) });
-	const url_box = h("div", {}, field("Link", url));
-	const book_box = h("div", { class: "row" },
-		h("div", { class: "wide" }, field("Buch", book)),
-		h("div", { class: "narrow" }, field("Seite", page)));
-	const update = (kind) => {
-		url_box.classList.toggle("hidden", kind !== "url");
-		book_box.classList.toggle("hidden", kind !== "book");
-	};
-	const radios = SOURCE_KINDS.map(([val, label]) =>
-		h("label", { class: "check" },
-			h("input", { type: "radio", name: "source_kind",
-				     value: val, checked: src.kind === val,
-				     onchange: () => update(val) }),
-			h("span", {}, label)));
-	update(src.kind);
-	const read = () => {
-		const kind = radios.map(l => l.firstChild)
-				   .find(r => r.checked).value;
-		const p = page.value.trim();
-		return {
-			kind: kind,
-			url: kind === "url" ? url.value.trim() : "",
-			book: kind === "book" ? book.value.trim() : "",
-			page: kind === "book" && p !== "" ? p : null,
-		};
-	};
-	const el = h("fieldset", {},
-		h("legend", {}, "Quelle"),
-		h("div", { class: "radio-row" }, radios),
-		url_box, book_box);
-	return { el: el, read: read };
-}
-
-function category_field(selected)
-{
-	const new_name = h("input", { name: "new_category",
-				      placeholder: "Name der Kategorie" });
-	const new_box = h("div", { class: "hidden" },
-		field("Neue Kategorie", new_name));
-	const sel = h("select", { name: "category", onchange: () => {
-		new_box.classList.toggle("hidden", sel.value !== NEW_CATEGORY);
-		if (sel.value === NEW_CATEGORY)
-			new_name.focus();
-	} }, category_options(selected, true, "– keine –"));
-	const el = h("div", {}, field("Kategorie", sel), new_box);
-	/*
-	 * Resolve the category id, creating a new category first when
-	 * the user asked for one.
-	 */
-	const resolve = async () => {
-		if (sel.value === "")
-			return null;
-		if (sel.value !== NEW_CATEGORY)
-			return parseInt(sel.value, 10);
-		const name = new_name.value.trim();
-		if (name === "")
-			throw new Error("Name der neuen Kategorie fehlt");
-		const existing = state.categories.find(
-			c => c.name.toLowerCase() === name.toLowerCase());
-		if (existing)
-			return existing.id;
-		const c = await API.create_category(name);
-		state.categories.push(c);
-		return c.id;
-	};
-	return { el: el, resolve: resolve };
-}
-
-function list_editor(items, make_row, add_label)
-{
-	const box = h("div", {}, items.map(make_row));
-	const add = h("button", { type: "button", onclick: () => {
-		const row = make_row({});
-		box.append(row);
-		row.querySelector("input, textarea").focus();
-	} }, add_label);
-	return { box: box, el: h("div", {}, box, add) };
-}
-
 async function save_recipe(id, input)
 {
 	const r = id ? await API.update_recipe(id, input)
@@ -1120,72 +810,26 @@ async function view_form(id)
 	await load_taxonomy();
 	const data = id ? recipe_to_input(await API.get_recipe(id))
 			: empty_input();
-	const v = data.version;
-
-	const title = h("input", { name: "title", required: true,
-				   value: v.title || "" });
-	const cat = category_field(data.category_id);
-	const tags = h("input", { name: "tags", placeholder: "vegi, schnell",
-				  autocapitalize: "none",
-				  value: data.tags.join(", ") });
-	const fav = h("input", { type: "checkbox", name: "favorite",
-				 checked: data.favorite });
-	const src = source_fields(data.source);
-	const servings = number_input("servings", v.servings);
-	const prep = number_input("prep_minutes", v.prep_minutes);
-	const cook = number_input("cook_minutes", v.cook_minutes);
-	const intro = h("textarea", { name: "intro", rows: 3 }, v.intro || "");
-	const ings = list_editor(v.ingredients || [], ingredient_row,
-				 "+ Zutat");
-	const steps = list_editor(v.steps || [], step_row, "+ Schritt");
-	const save = h("button", { type: "submit", class: "btn-primary" },
-		       "Speichern");
-
-	const form = h("form", { onsubmit: async (ev) => {
-		ev.preventDefault();
-		save.disabled = true;
-		try {
-			await save_recipe(id, {
-				category_id: await cat.resolve(),
-				tags: split_csv(tags.value),
-				favorite: fav.checked,
-				source: src.read(),
-				version: {
-					title: title.value.trim(),
-					intro: intro.value.trim(),
-					servings: int_or_null(servings.value),
-					prep_minutes: int_or_null(prep.value),
-					cook_minutes: int_or_null(cook.value),
-					ingredients: read_ingredients(ings.box),
-					steps: read_steps(steps.box),
-				},
-			});
-		} catch (e) {
-			toast(error_msg(e), true);
-			save.disabled = false;
-		}
-	} },
-		field("Titel", title),
-		cat.el,
-		field("Schlagworte (durch Komma getrennt)", tags),
-		h("label", { class: "check" }, fav, h("span", {}, "Favorit")),
-		src.el,
-		h("div", { class: "row bottom" },
-			field("Portionen", servings),
-			field("Vorbereitung (Min.)", prep),
-			field("Kochen (Min.)", cook)),
-		field("Einleitung", intro),
-		h("h2", {}, "Zutaten"), ings.el,
-		h("h2", {}, "Zubereitung"), steps.el,
-		h("div", { class: "actions" },
-			h("a", { class: "btn",
-				 href: id ? "#/recipe/" + id : "#/" },
-				"Abbrechen"),
-			save));
+	const back = id ? "#/recipe/" + id : "#/";
+	const form = recipe_form(data, state.categories, {
+		cancel_href: back,
+		on_save: (input) => save_recipe(id, input),
+	});
 	return h("div", {},
 		topbar(id ? "Rezept bearbeiten" : "Neues Rezept",
-		       back_button(id ? "#/recipe/" + id : "#/")),
+		       back_button(back)),
 		h("main", {}, form));
+}
+
+/* ------------------------------------------------------------------ */
+/* Import                                                              */
+/* ------------------------------------------------------------------ */
+
+async function view_import_route(query)
+{
+	await load_taxonomy();
+	return view_import(query, { navigate: navigate,
+				    categories: state.categories });
 }
 
 /* ------------------------------------------------------------------ */
