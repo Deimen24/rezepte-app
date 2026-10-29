@@ -5,7 +5,7 @@
  * Bump CACHE_VERSION whenever a shell file changes.
  */
 
-const CACHE_VERSION = "v1";
+const CACHE_VERSION = "v2";
 const CACHE_NAME = "rezepte-shell-" + CACHE_VERSION;
 
 const SHELL = [
@@ -13,6 +13,7 @@ const SHELL = [
 	"/index.html",
 	"/app.js",
 	"/api.js",
+	"/cook.js",
 	"/style.css",
 	"/manifest.webmanifest",
 	"/icons/icon-192.png",

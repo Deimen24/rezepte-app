@@ -17,6 +17,9 @@
 
 	# API and photos are served by the FastAPI container.
 	handle /api/* {
+		request_body {
+			max_size 20MB
+		}
 		reverse_proxy api:8000
 	}
 	handle /media/* {

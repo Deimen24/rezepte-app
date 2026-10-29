@@ -1,16 +1,21 @@
 /*
  * Recipe app: hash router and views. No framework, no build step.
  *
- * Routes: #/login, #/ (list), #/recipe/ID, #/new, #/edit/ID.
- * All user text is rendered through h() / textContent, never innerHTML.
+ * Routes: #/login, #/ (list), #/recipe/ID, #/new, #/edit/ID,
+ * #/cook/ID (cook.js). All user text is rendered through h() /
+ * textContent, never innerHTML.
  */
 
 import * as API from "./api.js";
+import { view_cook } from "./cook.js";
 
 const TOAST_MS = 4000;
 const DEBOUNCE_MS = 300;
 const LOADING_DELAY_MS = 150;
 const NEW_CATEGORY = "__new__";
+const RATING_MAX = 5;
+/* Hash suffix set by cooking mode: open the cook-log form. */
+const COOKED_FLAG = "?cooked";
 const SOURCE_KINDS = [
 	["url", "Link"],
 	["book", "Buch"],
@@ -35,9 +40,11 @@ const filter = {
 const ROUTES = [
 	[/^#\/login$/, view_login],
 	[/^#\/?$/, view_list],
-	[/^#\/recipe\/(\d+)$/, view_detail],
+	[/^#\/recipe\/(\d+)(\?cooked)?$/, view_detail],
 	[/^#\/new$/, view_form],
 	[/^#\/edit\/(\d+)$/, view_form],
+	[/^#\/cook\/(\d+)$/, (id) => view_cook(id, {
+		h: h, navigate: navigate, ingredient_text: ingredient_text })],
 ];
 
 let render_seq = 0;
@@ -78,11 +85,12 @@ function append(el, children)
 	}
 }
 
-function show(el)
+function show(el, keep_scroll)
 {
 	const app = document.getElementById("app");
 	app.replaceChildren(el);
-	window.scrollTo(0, 0);
+	if (!keep_scroll)
+		window.scrollTo(0, 0);
 }
 
 function toast(msg, is_error)
@@ -126,6 +134,28 @@ function topbar(title, ...actions)
 		h("h1", {}, title), ...actions);
 }
 
+/*
+ * Overflow menu (native <details>), closed on any tap outside.
+ */
+function menu(...items)
+{
+	const d = h("details", { class: "menu" },
+		h("summary", { class: "btn btn-icon", "aria-label": "Menü" },
+			"⋯"),
+		h("div", { class: "menu-list" }, items));
+	const close = (ev) => {
+		if (!d.contains(ev.target))
+			d.removeAttribute("open");
+	};
+	d.addEventListener("toggle", () => {
+		if (d.open)
+			document.addEventListener("click", close);
+		else
+			document.removeEventListener("click", close);
+	});
+	return d;
+}
+
 /* ------------------------------------------------------------------ */
 /* Formatting                                                          */
 /* ------------------------------------------------------------------ */
@@ -146,6 +176,33 @@ function fmt_amount(a)
 function fmt_minutes(n)
 {
 	return n === null || n === undefined ? "" : n + " Min.";
+}
+
+/* "2026-10-29" or an ISO datetime -> "29.10.2026" */
+function fmt_date(s)
+{
+	const m = String(s || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+	return m ? m[3] + "." + m[2] + "." + m[1] : str(s);
+}
+
+function pad2(n)
+{
+	return String(n).padStart(2, "0");
+}
+
+/* Local date as yyyy-mm-dd (not UTC). */
+function today_iso()
+{
+	const d = new Date();
+	return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" +
+	       pad2(d.getDate());
+}
+
+function stars_text(n)
+{
+	if (!n)
+		return "";
+	return "★".repeat(n) + "☆".repeat(RATING_MAX - n);
 }
 
 function str(v)
@@ -319,19 +376,31 @@ function star()
 	return h("span", { class: "star", "aria-label": "Favorit" }, "★");
 }
 
+function cooked_line(r)
+{
+	if (!r.cooked_count)
+		return null;
+	const last = r.last_cooked ? "zuletzt " + fmt_date(r.last_cooked) : "";
+	return h("div", { class: "meta" },
+		join_present([r.cooked_count + "× gekocht", last], ", "));
+}
+
 function recipe_card(r)
 {
 	const cat = r.category ? r.category.name : "";
 	const tags = (r.tags || []).map(t => "#" + t).join(" ");
+	const meta = join_present([cat, tags], " · ");
 	return h("li", {},
 		h("a", { class: "card", href: "#/recipe/" + r.id },
-			h("div", { class: "title" },
-				r.favorite ? star() : null,
-				h("span", {}, r.title)),
-			join_present([cat, tags], " · ") ?
-				h("div", { class: "meta" },
-					join_present([cat, tags], " · ")) :
-				null));
+			r.thumb_url ? h("img", { class: "thumb", alt: "",
+						 src: r.thumb_url,
+						 loading: "lazy" }) : null,
+			h("div", { class: "body" },
+				h("div", { class: "title" },
+					r.favorite ? star() : null,
+					h("span", {}, r.title)),
+				meta ? h("div", { class: "meta" }, meta) : null,
+				cooked_line(r))));
 }
 
 async function fill_list(ul)
@@ -413,8 +482,10 @@ async function view_list()
 		topbar("Rezepte",
 			h("a", { class: "btn btn-primary", href: "#/new" },
 				"+ Neu"),
-			h("button", { type: "button", class: "btn-link",
-				      onclick: logout }, "Abmelden")),
+			menu(h("a", { href: API.export_url(),
+				      download: "rezepte.zip" }, "Export"),
+			     h("button", { type: "button", onclick: logout },
+			       "Abmelden"))),
 		h("main", {}, filter_bar(reload), ul));
 }
 
@@ -443,6 +514,13 @@ function source_line(src)
 			join_present([src.book, page], ", "));
 	}
 	return null;
+}
+
+/* "250 g Mehl (gesiebt)" for cooking mode. */
+function ingredient_text(i)
+{
+	const s = join_present([fmt_amount(i.amount), i.unit, i.name], " ");
+	return i.note ? s + " (" + i.note + ")" : s;
 }
 
 function ingredient_item(i)
@@ -487,9 +565,273 @@ async function remove_recipe(id)
 	}
 }
 
-async function view_detail(id)
+/*
+ * Re-fetch the recipe and redraw the detail view in place (no scroll
+ * jump), e.g. after adding a note or a photo.
+ */
+async function refresh_detail(id, opts)
 {
-	const r = await API.get_recipe(id);
+	const seq = ++render_seq;
+	try {
+		const r = await API.get_recipe(id);
+		if (seq === render_seq)
+			show(detail_el(r, opts || {}), true);
+	} catch (e) {
+		toast(error_msg(e), true);
+	}
+}
+
+/*
+ * Run an API call, then refresh. Errors go to the toast.
+ */
+async function mutate(id, fn, done_msg, opts)
+{
+	try {
+		await fn();
+		if (done_msg)
+			toast(done_msg, false);
+		await refresh_detail(id, opts);
+	} catch (e) {
+		toast(error_msg(e), true);
+	}
+}
+
+function favorite_button(r)
+{
+	return h("button", { type: "button", class: "btn btn-icon fav",
+			     "aria-label": "Favorit",
+			     "aria-pressed": pressed(r.favorite),
+			     onclick: (ev) => {
+		ev.currentTarget.disabled = true;
+		mutate(r.id, () => API.set_favorite(r.id, !r.favorite), "");
+	} }, r.favorite ? "★" : "☆");
+}
+
+/* ---- photos ---- */
+
+function photo_overlay(p)
+{
+	const close = () => {
+		box.remove();
+		document.removeEventListener("keydown", on_key);
+	};
+	const on_key = (ev) => {
+		if (ev.key === "Escape")
+			close();
+	};
+	const box = h("div", { class: "overlay", onclick: close },
+		h("img", { src: p.url, alt: "" }),
+		h("button", { type: "button", class: "btn-icon close",
+			      "aria-label": "Schliessen" }, "✕"));
+	document.addEventListener("keydown", on_key);
+	document.body.append(box);
+}
+
+function photo_item(id, p)
+{
+	return h("figure", { class: "photo" },
+		h("button", { type: "button", class: "thumb-btn",
+			      "aria-label": "Foto öffnen",
+			      onclick: () => photo_overlay(p) },
+			h("img", { src: p.thumb_url, alt: "",
+				   loading: "lazy" })),
+		p.is_own_result ? h("figcaption", { class: "badge" },
+					"Eigenes Ergebnis") : null,
+		h("button", { type: "button", class: "del btn-danger",
+			      "aria-label": "Foto löschen", onclick: () => {
+			if (!confirm("Foto löschen?"))
+				return;
+			mutate(id, () => API.delete_photo(id, p.id),
+			       "Foto gelöscht");
+		} }, "✕"));
+}
+
+function photo_upload(id)
+{
+	const own = h("input", { type: "checkbox", name: "is_own_result" });
+	const btn = h("button", { type: "button" }, "Foto");
+	const file = h("input", { type: "file", accept: "image/*",
+				  capture: "environment", class: "hidden",
+				  "aria-label": "Foto wählen",
+				  onchange: async (ev) => {
+		const f = ev.target.files && ev.target.files[0];
+		if (!f)
+			return;
+		btn.disabled = true;
+		btn.textContent = "Lädt …";
+		await mutate(id, () => API.upload_photo(id, f, own.checked),
+			     "Foto gespeichert");
+		btn.disabled = false;
+		btn.textContent = "Foto";
+		ev.target.value = "";
+	} });
+	btn.addEventListener("click", () => file.click());
+	return h("div", { class: "upload" },
+		btn, file,
+		h("label", { class: "check" }, own,
+			h("span", {}, "eigenes Ergebnis")));
+}
+
+function photo_section(r)
+{
+	const photos = r.photos || [];
+	return h("section", { class: "photos-section" },
+		photos.length ? h("div", { class: "photos" },
+				  photos.map(p => photo_item(r.id, p))) : null,
+		photo_upload(r.id));
+}
+
+/* ---- cook log ---- */
+
+function newest_first(items, key)
+{
+	return items.slice().sort((a, b) => {
+		if (a[key] === b[key])
+			return b.id - a.id;
+		return a[key] < b[key] ? 1 : -1;
+	});
+}
+
+function delete_button(label, on_click)
+{
+	return h("button", { type: "button", class: "del btn-danger",
+			     "aria-label": label, onclick: on_click }, "✕");
+}
+
+function cooklog_item(id, c)
+{
+	return h("li", { class: "entry" },
+		h("div", { class: "entry-head" },
+			h("span", { class: "date" }, fmt_date(c.cooked_on)),
+			c.rating ? h("span", { class: "rating" },
+				     stars_text(c.rating)) : null,
+			delete_button("Eintrag löschen", () => {
+				if (!confirm("Eintrag löschen?"))
+					return;
+				mutate(id, () => API.delete_cooklog(id, c.id),
+				       "Eintrag gelöscht");
+			})),
+		c.comment ? h("p", { class: "comment" }, c.comment) : null);
+}
+
+function star_picker()
+{
+	let value = null;
+	const btns = [];
+	const draw = () => {
+		btns.forEach((b, i) => {
+			const on = value !== null && i < value;
+			b.textContent = on ? "★" : "☆";
+			b.setAttribute("aria-pressed", pressed(on));
+		});
+	};
+	for (let i = 1; i <= RATING_MAX; i++)
+		btns.push(h("button", { type: "button",
+					"aria-label": i + " Sterne",
+					onclick: () => {
+			value = value === i ? null : i;
+			draw();
+		} }));
+	draw();
+	return { el: h("div", { class: "stars", role: "group",
+				"aria-label": "Bewertung" }, btns),
+		 read: () => value };
+}
+
+function cooklog_form(id)
+{
+	const date = h("input", { type: "date", name: "cooked_on",
+				  value: today_iso(), required: true });
+	const stars = star_picker();
+	const comment = h("input", { name: "comment",
+				     placeholder: "Kommentar" });
+	const save = h("button", { type: "submit", class: "btn-primary" },
+		       "Speichern");
+	return h("form", { class: "entry-form", onsubmit: (ev) => {
+		ev.preventDefault();
+		save.disabled = true;
+		mutate(id, () => API.add_cooklog(id, {
+			cooked_on: date.value,
+			rating: stars.read(),
+			comment: comment.value.trim(),
+		}), "Eingetragen");
+	} },
+		field("Datum", date),
+		h("div", { class: "field" },
+			h("span", { class: "field-label" }, "Bewertung"),
+			stars.el),
+		field("Kommentar", comment),
+		h("div", { class: "actions" }, save));
+}
+
+function cooklog_section(r, open_form)
+{
+	const entries = newest_first(r.cook_log || [], "cooked_on");
+	const form = cooklog_form(r.id);
+	form.classList.toggle("hidden", !open_form);
+	const add = h("button", { type: "button", onclick: () => {
+		form.classList.toggle("hidden");
+		if (!form.classList.contains("hidden"))
+			form.scrollIntoView({ block: "nearest" });
+	} }, "Eintragen");
+	return h("section", {},
+		h("div", { class: "section-head" },
+			h("h2", {}, "Gekocht"), add),
+		entries.length ? h("ul", { class: "entries" },
+				   entries.map(c => cooklog_item(r.id, c)))
+			       : null,
+		form);
+}
+
+/* ---- notes ---- */
+
+function note_item(id, n)
+{
+	return h("li", { class: "entry" },
+		h("div", { class: "entry-head" },
+			h("span", { class: "date" }, fmt_date(n.created_at)),
+			delete_button("Notiz löschen", () => {
+				if (!confirm("Notiz löschen?"))
+					return;
+				mutate(id, () => API.delete_note(id, n.id),
+				       "Notiz gelöscht");
+			})),
+		h("p", { class: "comment" }, n.text));
+}
+
+function note_form(id)
+{
+	const ta = h("textarea", { name: "note", rows: 2,
+				   placeholder: "Notiz", required: true,
+				   "aria-label": "Notiz" });
+	const save = h("button", { type: "submit", class: "btn-primary" },
+		       "Speichern");
+	return h("form", { class: "entry-form", onsubmit: (ev) => {
+		ev.preventDefault();
+		const text = ta.value.trim();
+		if (text === "")
+			return;
+		save.disabled = true;
+		mutate(id, () => API.add_note(id, text), "Gespeichert");
+	} },
+		ta,
+		h("div", { class: "actions" }, save));
+}
+
+function notes_section(r)
+{
+	const notes = newest_first(r.notes || [], "created_at");
+	return h("section", {},
+		h("h2", {}, "Notizen"),
+		notes.length ? h("ul", { class: "entries" },
+				 notes.map(n => note_item(r.id, n))) : null,
+		note_form(r.id));
+}
+
+/* ---- page ---- */
+
+function detail_el(r, opts)
+{
 	let show_original = false;
 	const title = h("h1", {}, r.own.title);
 	const body = h("div", {}, version_section(r.own));
@@ -503,23 +845,41 @@ async function view_detail(id)
 	} }, "Original anzeigen");
 	const cat = r.category ? r.category.name : "";
 	const tags = (r.tags || []).map(t => "#" + t).join(" ");
-	const meta = join_present([r.favorite ? "★ Favorit" : "",
-				   cat, tags], " · ");
+	const meta = join_present([cat, tags], " · ");
 	const del = h("button", { type: "button", class: "btn-danger",
 				  onclick: () => remove_recipe(r.id) },
 		      "Löschen");
-	return h("div", {},
-		topbar(r.own.title, back_button("#/")),
+	const log = cooklog_section(r, opts.open_cooklog);
+	const el = h("div", {},
+		topbar(r.own.title, back_button("#/"), favorite_button(r)),
 		h("main", {},
 			title,
 			meta ? h("p", { class: "meta-line" }, meta) : null,
 			source_line(r.source),
+			photo_section(r),
+			h("div", { class: "actions" },
+				h("a", { class: "btn btn-primary",
+					 href: "#/cook/" + r.id }, "Kochen")),
 			body,
 			h("div", { class: "actions" },
 				toggle,
 				h("a", { class: "btn", href: "#/edit/" + r.id },
 					"Bearbeiten"),
-				del)));
+				del),
+			log,
+			notes_section(r)));
+	if (opts.open_cooklog)
+		setTimeout(() => log.scrollIntoView({ block: "start" }), 0);
+	return el;
+}
+
+async function view_detail(id)
+{
+	const r = await API.get_recipe(id);
+	const cooked = location.hash.endsWith(COOKED_FLAG);
+	if (cooked)
+		history.replaceState(null, "", "#/recipe/" + id);
+	return detail_el(r, { open_cooklog: cooked });
 }
 
 /* ------------------------------------------------------------------ */

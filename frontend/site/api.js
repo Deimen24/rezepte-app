@@ -4,7 +4,8 @@
  * Every call sends the session cookie. Errors are thrown as Error
  * with the server's "detail" as message. A 401 on any call except
  * login fires UNAUTHORIZED_EVENT on window so the app can show the
- * login screen.
+ * login screen. A FormData body is sent as multipart without a JSON
+ * content type.
  */
 
 const API_BASE = "/api";
@@ -19,7 +20,9 @@ export async function api(method, path, body)
 		credentials: "same-origin",
 		headers: { "Accept": "application/json" },
 	};
-	if (body !== undefined) {
+	if (body instanceof FormData) {
+		opts.body = body;
+	} else if (body !== undefined) {
 		opts.headers["Content-Type"] = "application/json";
 		opts.body = JSON.stringify(body);
 	}
@@ -133,4 +136,57 @@ export function create_category(name)
 export function list_tags()
 {
 	return api("GET", "/tags");
+}
+
+function recipe_path(id, sub)
+{
+	return "/recipes/" + encodeURIComponent(id) + sub;
+}
+
+export function add_note(id, text)
+{
+	return api("POST", recipe_path(id, "/notes"), { text });
+}
+
+export function delete_note(id, nid)
+{
+	return api("DELETE",
+		   recipe_path(id, "/notes/" + encodeURIComponent(nid)));
+}
+
+/* entry: {cooked_on: "yyyy-mm-dd", rating: 1-5 | null, comment} */
+export function add_cooklog(id, entry)
+{
+	return api("POST", recipe_path(id, "/cooklog"), entry);
+}
+
+export function delete_cooklog(id, cid)
+{
+	return api("DELETE",
+		   recipe_path(id, "/cooklog/" + encodeURIComponent(cid)));
+}
+
+export function set_favorite(id, favorite)
+{
+	return api("PUT", recipe_path(id, "/favorite"),
+		   { favorite: !!favorite });
+}
+
+export function upload_photo(id, file, is_own_result)
+{
+	const fd = new FormData();
+	fd.append("file", file, file.name || "foto.jpg");
+	fd.append("is_own_result", is_own_result ? "true" : "false");
+	return api("POST", recipe_path(id, "/photos"), fd);
+}
+
+export function delete_photo(id, pid)
+{
+	return api("DELETE",
+		   recipe_path(id, "/photos/" + encodeURIComponent(pid)));
+}
+
+export function export_url()
+{
+	return API_BASE + "/export";
 }
