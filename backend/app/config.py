@@ -25,6 +25,9 @@ class Settings(BaseSettings):
 	session_days: int = DEFAULT_SESSION_DAYS
 	cookie_secure: bool = True
 	api_docs: bool = False
+	ms_client_id: str = ""
+	ms_tenant: str = "consumers"
+	todo_list: str = "Einkauf"
 
 	@model_validator(mode="after")
 	def build_db_url(self):

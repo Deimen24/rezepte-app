@@ -7,6 +7,7 @@ import sys
 
 from app.db import SessionLocal
 from app.services import auth as auth_service
+from app.services import todo as todo_service
 
 PASSWORD_ENV = "REZEPTE_PASSWORD"
 MIN_PASSWORD_LEN = 1
@@ -53,6 +54,20 @@ def cmd_purge_sessions(args) -> None:
 	print("%d abgelaufene Sitzungen geloescht." % n)
 
 
+def cmd_todo_login(args) -> None:
+	try:
+		info = todo_service.start_device_login()
+		print("Im Browser %s oeffnen und den Code %s eingeben."
+		      % (info["verification_uri"], info["user_code"]))
+		sys.stdout.flush()
+		with SessionLocal() as db:
+			todo_service.finish_device_login(
+				db, info["device_code"], info["interval"])
+	except todo_service.TodoError as e:
+		sys.exit("Fehler: %s" % e.detail)
+	print("Angemeldet.")
+
+
 def build_parser() -> argparse.ArgumentParser:
 	p = argparse.ArgumentParser(prog="python -m app.cli",
 				    description="Verwaltung der Rezepte-App")
@@ -69,6 +84,10 @@ def build_parser() -> argparse.ArgumentParser:
 	g = sub.add_parser("purge-sessions",
 			   help="abgelaufene Sitzungen loeschen")
 	g.set_defaults(func=cmd_purge_sessions)
+
+	t = sub.add_parser("todo-login",
+			   help="bei Microsoft To Do anmelden")
+	t.set_defaults(func=cmd_todo_login)
 	return p
 
 

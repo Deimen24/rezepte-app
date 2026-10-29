@@ -40,6 +40,10 @@ def set_version(version: RecipeVersion, data: VersionIn) -> None:
 	version.servings = data.servings
 	version.prep_minutes = data.prep_minutes
 	version.cook_minutes = data.cook_minutes
+	version.kcal = data.nutrition.kcal
+	version.protein_g = data.nutrition.protein_g
+	version.carbs_g = data.nutrition.carbs_g
+	version.fat_g = data.nutrition.fat_g
 	version.ingredients = [
 		Ingredient(position=i, amount=ing.amount, unit=ing.unit,
 			   name=ing.name, note=ing.note)

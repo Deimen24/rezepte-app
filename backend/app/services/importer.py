@@ -14,6 +14,7 @@ from app.models import NAME_LEN
 from app.schemas import (
 	ImportPreview,
 	ImportVersion,
+	Nutrition,
 	ParsedIngredient,
 	Source,
 	StepIn,
@@ -42,6 +43,8 @@ def _version(data: RecipeData) -> ImportVersion:
 		servings=data.servings,
 		prep_minutes=data.prep_minutes,
 		cook_minutes=data.cook_minutes,
+		nutrition=Nutrition(kcal=data.kcal, protein_g=data.protein_g,
+				    carbs_g=data.carbs_g, fat_g=data.fat_g),
 		ingredients=parse_ingredient_lines(data.ingredient_lines),
 		steps=[StepIn(text=s) for s in data.steps if s.strip()],
 	)

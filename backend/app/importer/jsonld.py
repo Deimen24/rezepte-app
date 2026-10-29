@@ -2,6 +2,7 @@
 
 import json
 import re
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 from bs4 import BeautifulSoup
 
@@ -15,6 +16,11 @@ FIRST_INT = re.compile(r"\d+")
 BLOCK_END = re.compile(r"<\s*(?:br|/p|/li|/div)\s*/?>", re.I)
 NUMBERED = re.compile(r"(?:^|(?<=\s))\d{1,2}[.)]\s+")
 HTML_COMMENT = re.compile(r"<!--|-->|<!\[CDATA\[|\]\]>")
+NUTRIENT = re.compile(r"^\s*(\d+(?:[.,]\d+)?)\s*(?:kcal|calories|cal|g)?\s*$",
+		      re.I)
+NUTRITION_MAX = Decimal("99999.9")
+NUTRIENTS = (("kcal", "calories"), ("protein_g", "proteinContent"),
+	     ("carbs_g", "carbohydrateContent"), ("fat_g", "fatContent"))
 
 
 def _is_ld_json(value) -> bool:
@@ -142,6 +148,36 @@ def _image(value) -> str | None:
 	return None
 
 
+def _nutrient(value) -> Decimal | None:
+	"""Accept "250 kcal", "12,5 g" or a bare number; else None."""
+	if isinstance(value, bool):
+		return None
+	if isinstance(value, (int, float)):
+		value = str(value)
+	if not isinstance(value, str):
+		return None
+	m = NUTRIENT.match(value)
+	if not m:
+		return None
+	try:
+		amount = Decimal(m.group(1).replace(",", "."))
+	except InvalidOperation:
+		return None
+	if amount < 0 or amount > NUTRITION_MAX:
+		return None
+	return amount.quantize(Decimal("0.1"), ROUND_HALF_UP)
+
+
+def _nutrition(value, data: RecipeData) -> None:
+	"""Values are per serving as schema.org defines."""
+	if isinstance(value, list):
+		value = value[0] if value else None
+	if not isinstance(value, dict):
+		return
+	for attr, key in NUTRIENTS:
+		setattr(data, attr, _nutrient(value.get(key)))
+
+
 def _map(node: dict) -> RecipeData:
 	data = RecipeData()
 	data.title = clean_text(node.get("name"))
@@ -158,6 +194,7 @@ def _map(node: dict) -> RecipeData:
 	data.ingredient_lines = _lines(node.get("recipeIngredient"))
 	_steps(node.get("recipeInstructions"), data.steps)
 	data.image_url = _image(node.get("image"))
+	_nutrition(node.get("nutrition"), data)
 	if not data.ingredient_lines and not data.steps:
 		data.warnings.append("Rezept ohne Zutaten und Schritte")
 	return data
