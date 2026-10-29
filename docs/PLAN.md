@@ -85,5 +85,66 @@ Reserviert für Phase 2 (nicht gebaut): `/api/recipes/{id}/notes`,
 Tests grün, `docker compose config` gültig, Caddyfile validiert,
 Stack gestartet, Rezept über die Oberfläche angelegt.
 
-## Phase 2 – Küche (offen)
+## Phase 2 – Küche (Plan, wartet auf OK)
+
+### Dateien
+    backend/requirements.txt: + pillow
+    backend/app/images.py                  resize, EXIF-Drehung, JPEG
+    backend/app/services/{notes,cooklog,photos,export}.py
+    backend/app/routers/{notes,cooklog,photos,export,media}.py
+    backend/app/schemas.py                 NoteIn/Out, CookLogIn/Out,
+                                           PhotoOut, RecipeOut erweitert
+    backend/tests/test_{notes,cooklog,photos,export,images}.py
+    frontend/site/cook.js                  Kochmodus
+    frontend/site/app.js, api.js, style.css, sw.js (CACHE_VERSION)
+    frontend/Caddyfile                     request_body max_size 20MB
+
+### Tabellen
+Keine neue Migration: `notes`, `cook_log`, `photos` sind seit 0001 da.
+
+### Endpunkte (alle mit Login)
+| Methode | Pfad | Zweck |
+|---------|------|-------|
+| POST | /api/recipes/{id}/notes | `{text}` → NoteOut |
+| DELETE | /api/recipes/{id}/notes/{nid} | 204 |
+| POST | /api/recipes/{id}/cooklog | `{cooked_on, rating 1–5, comment}` → CookLogOut |
+| DELETE | /api/recipes/{id}/cooklog/{cid} | 204 |
+| PUT | /api/recipes/{id}/favorite | `{favorite}` → `{favorite}` |
+| POST | /api/recipes/{id}/photos | multipart `file`, `is_own_result` → PhotoOut |
+| DELETE | /api/recipes/{id}/photos/{pid} | 204, löscht Dateien |
+| GET | /media/{name} | Bilddatei aus storage.py |
+| GET | /api/export | ZIP: `recipes.json` (alle Rezepte mit beiden Versionen, Notizen, Kochlog, Fotoliste) und `photos/` |
+
+### JSON-Formen
+    NoteOut     {id, created_at, text}
+    CookLogOut  {id, cooked_on, rating, comment}
+    PhotoOut    {id, url, thumb_url, is_own_result, created_at}
+    RecipeOut   + notes: [NoteOut], cook_log: [CookLogOut],
+                  photos: [PhotoOut]
+    RecipeListItem + thumb_url | null, cooked_count, last_cooked | null
+
+### Fotos
+- Upload bis 20 MB, Formate JPEG, PNG, HEIC nicht (iPhone liefert bei
+  `accept="image/*"` JPEG).
+- Serverseitig: EXIF-Drehung anwenden, längste Seite 1600 px, JPEG
+  Qualität 85, EXIF entfernt; Vorschau 400 px. Dateinamen
+  `{photo_id}.jpg` und `{photo_id}_t.jpg`, nur über `storage.py`.
+- Löschen eines Rezepts löscht die Dateien mit.
+
+### Oberfläche
+- Detail: Favorit-Stern (ein Tipp), Notiz-Feld mit «Speichern»,
+  «Gekocht» mit Datum (heute), Sterne 1–5, Kommentar; Fotoliste,
+  Upload über Kamera oder Galerie (`capture="environment"`), Markierung
+  «eigenes Ergebnis»; Knopf «Kochen».
+- Kochmodus `#/cook/ID`: Wake Lock (`navigator.wakeLock`), Schrift
+  grösser, Zutaten zum Abhaken, ein Schritt gross mit «Weiter» und
+  «Zurück», Abhak-Stand in `sessionStorage`. Beim Verlassen «Gekocht»
+  anbieten.
+- Liste: Vorschaubild, Export-Knopf lädt `/api/export`.
+
+### Tests
+Service und API je Endpunkt, Bildverkleinerung (Grösse, Drehung, kein
+EXIF), Export-ZIP (Inhalt, Fotos dabei), Löschen räumt Dateien weg,
+Fehlerfälle (fremde Rezept-ID, zu grosse Datei, kein Bild).
+
 ## Phase 3 – Import (offen)
