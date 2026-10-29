@@ -1,6 +1,6 @@
 """Pydantic models for the JSON API (see docs/PLAN.md, "JSON-Formen")."""
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 
@@ -164,6 +164,67 @@ class RecipeInput(BaseModel):
 		return seen
 
 
+NOTE_MAX = 5000
+COMMENT_MAX = 2000
+RATING_MIN = 1
+RATING_MAX = 5
+
+
+class NoteIn(BaseModel):
+	text: str = Field(min_length=1, max_length=NOTE_MAX)
+
+	@field_validator("text", mode="before")
+	@classmethod
+	def strip_text(cls, value):
+		return value.strip() if isinstance(value, str) else value
+
+
+class NoteOut(BaseModel):
+	model_config = ConfigDict(from_attributes=True)
+
+	id: int
+	created_at: datetime
+	text: str
+
+
+class CookLogIn(BaseModel):
+	cooked_on: date
+	rating: int | None = Field(default=None, ge=RATING_MIN, le=RATING_MAX)
+	comment: str = Field(default="", max_length=COMMENT_MAX)
+
+	@field_validator("comment", mode="before")
+	@classmethod
+	def strip_text(cls, value):
+		if value is None:
+			return ""
+		return value.strip() if isinstance(value, str) else value
+
+
+class CookLogOut(BaseModel):
+	model_config = ConfigDict(from_attributes=True)
+
+	id: int
+	cooked_on: date
+	rating: int | None
+	comment: str
+
+
+class FavoriteIn(BaseModel):
+	favorite: bool
+
+
+class FavoriteOut(BaseModel):
+	favorite: bool
+
+
+class PhotoOut(BaseModel):
+	id: int
+	url: str
+	thumb_url: str
+	is_own_result: bool
+	created_at: datetime
+
+
 class RecipeOut(BaseModel):
 	id: int
 	category: CategoryOut | None
@@ -172,6 +233,9 @@ class RecipeOut(BaseModel):
 	source: Source
 	original: VersionOut
 	own: VersionOut
+	notes: list[NoteOut]
+	cook_log: list[CookLogOut]
+	photos: list[PhotoOut]
 	created_at: datetime
 	updated_at: datetime
 
@@ -182,4 +246,7 @@ class RecipeListItem(BaseModel):
 	category: CategoryOut | None
 	tags: list[str]
 	favorite: bool
+	thumb_url: str | None
+	cooked_count: int
+	last_cooked: date | None
 	updated_at: datetime

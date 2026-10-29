@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+MEDIA_URL_PREFIX = "/media/"
+
 from app.config import settings
 
 
@@ -50,3 +52,12 @@ def delete(name: str) -> None:
 
 def exists(name: str) -> bool:
 	return media_path(name).is_file()
+
+
+def photo_name(photo_id: int, thumb: bool = False) -> str:
+	"""File name of a stored photo; thumbnails carry a _t suffix."""
+	return "%d%s.jpg" % (photo_id, "_t" if thumb else "")
+
+
+def media_url(name: str) -> str:
+	return MEDIA_URL_PREFIX + name
