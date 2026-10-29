@@ -12,7 +12,8 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.deps import current_user
-from app.schemas import PhotoOut
+from app.importer.fetch import FetchError
+from app.schemas import PhotoOut, PhotoUrlIn
 from app.services import photos as service
 from app.services.photos import MAX_UPLOAD
 
@@ -40,6 +41,21 @@ async def upload_photo(recipe_id: int, file: UploadFile,
 	data = await read_upload(file)
 	try:
 		photo = service.add_photo(db, recipe_id, data, is_own_result)
+	except ValueError:
+		raise HTTPException(status_code=415, detail=NOT_IMAGE)
+	if photo is None:
+		raise HTTPException(status_code=404, detail=RECIPE_NOT_FOUND)
+	return service.to_out(photo)
+
+
+@router.post("/{recipe_id}/photos/url", response_model=PhotoOut,
+	     status_code=201)
+def photo_from_url(recipe_id: int, body: PhotoUrlIn,
+		   db: Session = Depends(get_db)):
+	try:
+		photo = service.add_photo_from_url(db, recipe_id, body.url)
+	except FetchError as e:
+		raise HTTPException(status_code=422, detail=e.detail)
 	except ValueError:
 		raise HTTPException(status_code=415, detail=NOT_IMAGE)
 	if photo is None:

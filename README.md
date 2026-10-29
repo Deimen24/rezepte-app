@@ -14,7 +14,8 @@ HTTPS: Nginx Proxy Manager (NPM) davor.
 Rezepte erfassen, bearbeiten, löschen; Filter nach Kategorie, Tags,
 Zutaten, Text; Original und eigene Version je Rezept; Kochmodus
 (Bildschirm bleibt an); Notizen; «gekocht am» mit Sternen; Fotos; Export
-als ZIP (Menü «⋯»). Später: Import per URL.
+als ZIP (Menü «⋯»); Import per URL (schema.org, sonst geraten) mit
+Vorschau; Zutaten als Text einfügen.
 
 ## Installation
 

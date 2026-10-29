@@ -16,4 +16,5 @@ class RecipeData:
 	warnings: list[str] = field(default_factory=list)
 
 	def is_usable(self) -> bool:
-		return bool(self.title and (self.ingredient_lines or self.steps))
+		has_body = self.ingredient_lines or self.steps
+		return bool(self.title and has_body)

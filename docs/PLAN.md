@@ -154,7 +154,7 @@ Fehlerfälle (fremde Rezept-ID, zu grosse Datei, kein Bild).
   Stand nach Reload), Export-Link.
 - Offen: Stack-Start beim Betreiber, Foto-Upload vom echten iPhone.
 
-## Phase 3 – Import (Plan, wartet auf OK)
+## Phase 3 – Import (gebaut, Stack-Start auf dem Server offen)
 
 ### Dateien
     backend/requirements.txt: + httpx, beautifulsoup4
@@ -252,4 +252,14 @@ Speichern läuft über das bestehende `POST /api/recipes` mit
   ungültiger URL; photos/url legt Foto an; Speichern aus Vorschau
   ergibt Original = Vorschau.
 
+### Stand 29.10.
+- Backend und Frontend gebaut; 577 Tests grün; Caddyfile validiert.
+- Oberfläche in Playwright geprüft: Import-Ansicht, Vorschau mit
+  Methode/Warnungen/Bild, Speichern mit Bild, `#/import?url=`,
+  «Zutaten einfügen» im Formular.
+- Offen: Stack-Start beim Betreiber, Test mit echten Rezeptseiten.
 
+## Spätere Phasen (nicht gebaut)
+Timer aus Schritten, Share Target (Android) und iOS-Kurzbefehl auf
+`#/import?url=`, Portionen umrechnen, Einkaufsliste nach Microsoft
+To Do, Kochbuchseiten per Foto, Teilen einzelner Rezepte, Nährwerte.

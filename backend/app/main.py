@@ -6,8 +6,8 @@ from fastapi import APIRouter, FastAPI
 
 from app import storage
 from app.config import settings
-from app.routers import (auth, cooklog, export, favorite, health, media,
-			 notes, photos, recipes, taxonomy)
+from app.routers import (auth, cooklog, export, favorite, health,
+			 importer, media, notes, photos, recipes, taxonomy)
 
 API_PREFIX = "/api"
 DOCS_URL = API_PREFIX + "/docs"
@@ -39,5 +39,6 @@ api.include_router(cooklog.router)
 api.include_router(favorite.router)
 api.include_router(photos.router)
 api.include_router(export.router)
+api.include_router(importer.router)
 app.include_router(api)
 app.include_router(media.router)

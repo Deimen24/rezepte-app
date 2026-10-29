@@ -1,8 +1,10 @@
 """Photo logic: process the upload, store files, keep rows in sync."""
 
+import httpx
 from sqlalchemy.orm import Session
 
 from app import images, storage
+from app.importer import fetch
 from app.models import Photo, Recipe
 from app.schemas import PhotoOut
 
@@ -33,6 +35,16 @@ def add_photo(db: Session, recipe_id: int, data: bytes,
 	db.commit()
 	db.refresh(photo)
 	return photo
+
+
+def add_photo_from_url(db: Session, recipe_id: int, url: str,
+		       client: httpx.Client | None = None) -> Photo | None:
+	"""Download an image and store it like an upload. FetchError and
+	ValueError (not an image) propagate; nothing is written then."""
+	if db.get(Recipe, recipe_id) is None:
+		return None
+	data = fetch.fetch_image(url, client)
+	return add_photo(db, recipe_id, data, False)
 
 
 def _remove_files(photo: Photo) -> None:
