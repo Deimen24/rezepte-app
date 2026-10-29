@@ -3,10 +3,13 @@
 from sqlalchemy import exists, func, or_, select
 from sqlalchemy.orm import Session, aliased, selectinload
 
+from app import storage
 from app.models import (
 	Category,
+	CookLog,
 	Ingredient,
 	Note,
+	Photo,
 	Recipe,
 	RecipeTag,
 	RecipeVersion,
@@ -16,6 +19,7 @@ from app.models import (
 	VersionKind,
 )
 from app.schemas import RecipeInput, VersionIn
+from app.services import photos
 from app.services.taxonomy import get_or_create_tags
 
 LOAD_ALL = (
@@ -23,6 +27,9 @@ LOAD_ALL = (
 	selectinload(Recipe.tags),
 	selectinload(Recipe.versions).selectinload(RecipeVersion.ingredients),
 	selectinload(Recipe.versions).selectinload(RecipeVersion.steps),
+	selectinload(Recipe.notes),
+	selectinload(Recipe.cook_log),
+	selectinload(Recipe.photos),
 )
 
 
@@ -102,6 +109,7 @@ def delete_recipe(db: Session, recipe_id: int) -> bool:
 	recipe = db.get(Recipe, recipe_id)
 	if recipe is None:
 		return False
+	photos.delete_recipe_photos(db, recipe)
 	db.delete(recipe)
 	db.commit()
 	return True
@@ -136,6 +144,31 @@ def text_matches(own, q: str):
 		   in_notes)
 
 
+def cook_stats():
+	"""Correlated scalar subqueries: (count, last cooked_on)."""
+	base = select(CookLog).where(CookLog.recipe_id == Recipe.id)
+	count = base.with_only_columns(func.count(CookLog.id))
+	last = base.with_only_columns(func.max(CookLog.cooked_on))
+	return count.scalar_subquery(), last.scalar_subquery()
+
+
+def first_photo_id():
+	"""Correlated scalar subquery: id of the oldest photo or NULL."""
+	return (
+		select(Photo.id)
+		.where(Photo.recipe_id == Recipe.id)
+		.order_by(Photo.created_at, Photo.id)
+		.limit(1)
+		.scalar_subquery()
+	)
+
+
+def thumb_url(photo_id: int | None) -> str | None:
+	if photo_id is None:
+		return None
+	return storage.media_url(storage.photo_name(photo_id, thumb=True))
+
+
 def list_recipes(db: Session, q: str | None = None,
 		 category_id: int | None = None,
 		 tags: list[str] | None = None,
@@ -143,8 +176,10 @@ def list_recipes(db: Session, q: str | None = None,
 		 favorite: bool | None = None) -> list[dict]:
 	"""Return RecipeListItem-shaped dicts ordered by the own title."""
 	own = aliased(RecipeVersion)
+	cooked_count, last_cooked = cook_stats()
 	stmt = (
-		select(Recipe, own.title)
+		select(Recipe, own.title, cooked_count, last_cooked,
+		       first_photo_id())
 		.join(own, (own.recipe_id == Recipe.id)
 		      & (own.kind == VersionKind.OWN))
 		.options(selectinload(Recipe.category),
@@ -161,16 +196,19 @@ def list_recipes(db: Session, q: str | None = None,
 		stmt = stmt.where(ingredient_exists(own, term))
 	if favorite is not None:
 		stmt = stmt.where(Recipe.favorite.is_(favorite))
-	return [list_item(recipe, title)
-		for recipe, title in db.execute(stmt)]
+	return [list_item(*row) for row in db.execute(stmt)]
 
 
-def list_item(recipe: Recipe, title: str) -> dict:
+def list_item(recipe: Recipe, title: str, cooked_count: int,
+	      last_cooked, photo_id: int | None) -> dict:
 	return {
 		"id": recipe.id,
 		"title": title,
 		"category": recipe.category,
 		"tags": [t.name for t in recipe.tags],
 		"favorite": recipe.favorite,
+		"thumb_url": thumb_url(photo_id),
+		"cooked_count": cooked_count,
+		"last_cooked": last_cooked,
 		"updated_at": recipe.updated_at,
 	}

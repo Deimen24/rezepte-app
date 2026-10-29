@@ -196,7 +196,8 @@ def test_list_with_empty_filters_returns_all(db):
 	items = service.list_recipes(db, q="", tags=[], ingredients=[])
 	assert [i["title"] for i in items] == ["Brot", "Suppe"]
 	assert set(items[0]) == {"id", "title", "category", "tags",
-				 "favorite", "updated_at"}
+				 "favorite", "thumb_url", "cooked_count",
+				 "last_cooked", "updated_at"}
 
 
 def test_list_q_without_match_returns_empty_list(db):

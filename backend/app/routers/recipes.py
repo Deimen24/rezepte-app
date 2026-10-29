@@ -7,17 +7,37 @@ from app.db import get_db
 from app.deps import current_user
 from app.models import Recipe
 from app.schemas import (
+	CookLogOut,
+	NoteOut,
 	RecipeInput,
 	RecipeListItem,
 	RecipeOut,
 	Source,
 	VersionOut,
 )
+from app.services import photos
 from app.services import recipes as service
 
 NOT_FOUND = "recipe not found"
 
 router = APIRouter(prefix="/recipes", dependencies=[Depends(current_user)])
+
+
+def notes_out(recipe: Recipe) -> list[NoteOut]:
+	rows = sorted(recipe.notes, key=lambda n: (n.created_at, n.id),
+		      reverse=True)
+	return [NoteOut.model_validate(n) for n in rows]
+
+
+def cook_log_out(recipe: Recipe) -> list[CookLogOut]:
+	rows = sorted(recipe.cook_log, key=lambda c: (c.cooked_on, c.id),
+		      reverse=True)
+	return [CookLogOut.model_validate(c) for c in rows]
+
+
+def photos_out(recipe: Recipe):
+	rows = sorted(recipe.photos, key=lambda p: (p.created_at, p.id))
+	return [photos.to_out(p) for p in rows]
 
 
 def to_out(recipe: Recipe) -> RecipeOut:
@@ -32,6 +52,9 @@ def to_out(recipe: Recipe) -> RecipeOut:
 		source=source,
 		original=VersionOut.model_validate(recipe.original),
 		own=VersionOut.model_validate(recipe.own),
+		notes=notes_out(recipe),
+		cook_log=cook_log_out(recipe),
+		photos=photos_out(recipe),
 		created_at=recipe.created_at,
 		updated_at=recipe.updated_at,
 	)

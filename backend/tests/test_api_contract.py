@@ -1,18 +1,24 @@
 """JSON shapes the frontend relies on (docs/PLAN.md, "JSON-Formen")."""
 
 import importlib
-from datetime import datetime
+from datetime import date, datetime
 
 import pytest
 from fastapi.testclient import TestClient
 
 import app.main as main_module
+from app import storage
 from app.config import settings
+from app.models import CookLog, Note, Photo
 
 RECIPE_OUT_KEYS = {"id", "category", "tags", "favorite", "source",
-		   "original", "own", "created_at", "updated_at"}
+		   "original", "own", "notes", "cook_log", "photos",
+		   "created_at", "updated_at"}
 LIST_ITEM_KEYS = {"id", "title", "category", "tags", "favorite",
-		  "updated_at"}
+		  "thumb_url", "cooked_count", "last_cooked", "updated_at"}
+NOTE_KEYS = {"id", "created_at", "text"}
+COOK_LOG_KEYS = {"id", "cooked_on", "rating", "comment"}
+PHOTO_KEYS = {"id", "url", "thumb_url", "is_own_result", "created_at"}
 VERSION_KEYS = {"title", "intro", "servings", "prep_minutes",
 		"cook_minutes", "ingredients", "steps"}
 INGREDIENT_KEYS = {"amount", "unit", "name", "note"}
@@ -75,6 +81,34 @@ def test_recipe_out_has_exactly_the_planned_keys(auth_client, created):
 	assert set(body["source"]) == SOURCE_KEYS
 
 
+def test_recipe_out_lists_are_empty_for_a_new_recipe(created):
+	assert created["notes"] == []
+	assert created["cook_log"] == []
+	assert created["photos"] == []
+
+
+def test_note_cook_log_photo_keys(auth_client, db, created):
+	rid = created["id"]
+	db.add(Note(recipe_id=rid, text="Mehr Salz."))
+	db.add(CookLog(recipe_id=rid, cooked_on=date(2026, 10, 1),
+		       rating=4, comment=""))
+	photo = Photo(recipe_id=rid, filename="")
+	db.add(photo)
+	db.flush()
+	photo.filename = storage.photo_name(photo.id)
+	db.commit()
+	body = auth_client.get("/api/recipes/%d" % rid).json()
+	assert set(body["notes"][0]) == NOTE_KEYS
+	assert set(body["cook_log"][0]) == COOK_LOG_KEYS
+	assert set(body["photos"][0]) == PHOTO_KEYS
+	photo = body["photos"][0]
+	assert photo["url"] == "/media/%d.jpg" % photo["id"]
+	assert photo["thumb_url"] == "/media/%d_t.jpg" % photo["id"]
+	assert is_iso_datetime(photo["created_at"])
+	assert is_iso_datetime(body["notes"][0]["created_at"])
+	assert body["cook_log"][0]["cooked_on"] == "2026-10-01"
+
+
 def test_post_and_put_return_the_same_shape_as_get(auth_client, created):
 	got = auth_client.get("/api/recipes/%d" % created["id"]).json()
 	assert set(created) == set(got) == RECIPE_OUT_KEYS
@@ -89,6 +123,9 @@ def test_list_item_has_exactly_the_planned_keys(auth_client, created):
 	assert set(items[0]) == LIST_ITEM_KEYS
 	assert items[0]["id"] == created["id"]
 	assert items[0]["title"] == created["own"]["title"]
+	assert items[0]["thumb_url"] is None
+	assert items[0]["cooked_count"] == 0
+	assert items[0]["last_cooked"] is None
 
 
 def test_amounts_are_strings_or_null(created):

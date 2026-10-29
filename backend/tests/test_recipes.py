@@ -90,7 +90,8 @@ def test_list_shows_own_title(auth_client):
 	item = items[0]
 	assert item["title"] == "Meine Kürbissuppe"
 	assert set(item) == {"id", "title", "category", "tags",
-			     "favorite", "updated_at"}
+			     "favorite", "thumb_url", "cooked_count",
+			     "last_cooked", "updated_at"}
 	assert item["tags"] == ["Herbst", "vegi"]
 
 
