@@ -1,0 +1,37 @@
+# Caddy configuration for the recipe app.
+#
+# DOMAIN comes from .env via compose. With DOMAIN=localhost Caddy
+# issues an internal certificate; otherwise Let's Encrypt is used.
+
+{$DOMAIN} {
+	root * /srv/site
+	encode gzip zstd
+
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; manifest-src 'self'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		-Server
+	}
+
+	# API and photos are served by the FastAPI container.
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+	handle /media/* {
+		reverse_proxy api:8000
+	}
+
+	# Static files with SPA fallback for non-file routes.
+	handle {
+		@shell path / /index.html /sw.js
+		header @shell Cache-Control "no-cache"
+
+		@icon path /icons/*
+		header @icon Cache-Control "public, max-age=31536000, immutable"
+
+		try_files {path} /index.html
+		file_server
+	}
+}
