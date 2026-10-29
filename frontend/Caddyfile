@@ -1,9 +1,9 @@
-# Caddy configuration for the recipe app.
-#
-# DOMAIN comes from .env via compose. With DOMAIN=localhost Caddy
-# issues an internal certificate; otherwise Let's Encrypt is used.
+# Plain HTTP; TLS is terminated by the external reverse proxy.
+{
+	auto_https off
+}
 
-{$DOMAIN} {
+:80 {
 	root * /srv/site
 	encode gzip zstd
 

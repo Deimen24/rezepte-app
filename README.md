@@ -1,44 +1,32 @@
 # Rezepte-App
 
-Private Rezeptsammlung für eine Person, gemacht für das Handy in der
-Küche. Läuft auf einem eigenen Server mit Docker, ohne Cloud-Dienste.
+Private Rezeptsammlung für das Handy in der Küche.
 
-## Was ist das
-
-Die App besteht aus vier Containern, die zusammen in `compose.yaml`
-beschrieben sind:
+## Container
 
 | Container | Aufgabe |
 |-----------|---------|
-| `web`     | Caddy: liefert die Oberfläche aus, leitet `/api` ans Backend weiter und besorgt automatisch das HTTPS-Zertifikat (Let's Encrypt) |
-| `api`     | FastAPI (Python): die ganze Logik, spielt beim Start die Datenbank-Migrationen selbst ein |
-| `db`      | PostgreSQL: die Datenbank in einem Docker-Volume |
-| `backup`  | Erstellt täglich einen Datenbank-Dump und ein Archiv der Fotos nach `./backups` und löscht alte Dateien |
+| `web`     | Caddy: Oberfläche, `/api` ans Backend, nur HTTP im internen Netz |
+| `api`     | FastAPI: Logik, spielt beim Start die Migrationen ein |
+| `db`      | PostgreSQL |
+| `backup`  | Täglich Datenbank-Dump und Foto-Archiv nach `./backups`, löscht alte Dateien |
 
-In Phase 1 kann man sich anmelden, Rezepte erfassen, anzeigen,
-bearbeiten und löschen sowie nach Kategorie, Tags, Zutaten und Text
-filtern. Jedes Rezept hat ein unveränderliches Original und eine eigene,
-bearbeitbare Version.
+Phase 1: anmelden, Rezepte erfassen, anzeigen, bearbeiten, löschen,
+filtern nach Kategorie, Tags, Zutaten und Text. Jedes Rezept hat ein
+unveränderliches Original und eine eigene, bearbeitbare Version.
 
-### Geplant
+Später: Kochmodus, Notizen, «gekocht am» mit Bewertung, Fotos, Export
+als ZIP, Import per URL.
 
-Noch nicht gebaut, kommt in späteren Phasen: Kochmodus, Notizen,
-«gekocht am» mit Bewertung, Fotos, Export als ZIP, Import per URL.
+HTTPS und Zugriff von aussen übernimmt ein vorgeschalteter Nginx Proxy
+Manager (NPM); die App selbst kennt kein Zertifikat.
 
 ## Voraussetzungen
 
-- Ein Linux-Server (z. B. ein kleiner VPS) mit installiertem Docker
-  inklusive `docker compose` (Docker Engine 24 oder neuer).
-- Eine Domain (z. B. `rezepte.example.ch`), deren DNS-Eintrag (A- bzw.
-  AAAA-Record) auf die IP-Adresse des Servers zeigt.
-- Die Ports 80 und 443 des Servers sind aus dem Internet erreichbar
-  (Firewall des Anbieters prüfen). Caddy braucht beide, um das
-  Zertifikat zu holen und zu erneuern.
-- `git` auf dem Server.
+- Linux-Server mit Docker Engine 24 oder neuer und `git`.
+- Für den Zugriff von aussen: NPM mit einer Domain, die auf ihn zeigt.
 
-## Installation in drei Schritten
-
-### 1. Repository holen
+## Installation
 
 ```bash
 git clone <URL-dieses-Repositories> rezepte-app
@@ -48,300 +36,219 @@ git clone <URL-dieses-Repositories> rezepte-app
 cd rezepte-app
 ```
 
-### 2. Einstellungen ausfüllen
-
 ```bash
 cp .env.example .env
 ```
 
-Dann `.env` mit einem Editor öffnen (z. B. `nano .env`) und die zwei
-Pflichtwerte setzen:
-
-- `DOMAIN`: die Domain ohne `https://`, z. B. `rezepte.example.ch`
-- `DB_PASSWORD`: ein langes, zufälliges Passwort (ohne Dollarzeichen).
-  Vorschlag erzeugen mit `openssl rand -hex 24`.
-
-Alles andere hat sinnvolle Vorgaben und ist in `.env.example`
-erklärt. Fehlt ein Pflichtwert, bricht der Start mit einem klaren
-Hinweis ab («DOMAIN fehlt in .env»).
-
-### 3. Starten
+In `.env` `DB_PASSWORD` setzen: lang und zufällig, ohne Dollarzeichen,
+z. B. aus `openssl rand -hex 24`.
 
 ```bash
 docker compose up -d --build
 ```
 
-Baut die Container aus dem Repository (`--build`), startet sie im
-Hintergrund (`-d`) und richtet Datenbank und Volumes ein. Der erste Start
-dauert einige Minuten, weil die Images gebaut werden und Caddy das
-Zertifikat holt.
+Baut die Images (`--build`) und startet die Container im Hintergrund
+(`-d`). Der erste Start dauert einige Minuten.
 
-Danach ist die App unter `https://DOMAIN` erreichbar. Der Status der
-vier Container:
+Danach ist die App im internen Netz unter `http://SERVER-IP:8080`
+erreichbar (`HTTP_PORT` in `.env` ändert den Port).
 
-```bash
-docker compose ps
-```
+## Zugriff von aussen über NPM
 
-Zeigt alle Container des Stacks mit Zustand (`running`, `healthy`).
+In NPM einen Proxy Host anlegen:
 
-## Benutzer anlegen
+- Domain: die eigene, z. B. `rezepte.example.ch`
+- Scheme `http`, Forward Hostname die Server-IP, Forward Port 8080
+- SSL: Zertifikat anfordern, «Force SSL» einschalten
 
-Die App hat genau einen Benutzer. Er wird einmal im Container angelegt:
-
-```bash
-docker compose exec api python -m app.cli create-user NAME
-```
-
-Führt den Befehl im laufenden `api`-Container aus; er fragt nach dem
-Passwort und legt den Benutzer `NAME` an. Danach kann man sich im
-Browser anmelden.
-
-Passwort später ändern:
-
-```bash
-docker compose exec api python -m app.cli set-password NAME
-```
-
-Alle Anmeldungen auf allen Geräten beenden (z. B. nach Verlust des
-Handys):
-
-```bash
-docker compose exec api python -m app.cli purge-sessions
-```
-
-## Handy-Zugriff und Installation als App
-
-Im Handy-Browser `https://DOMAIN` öffnen und anmelden. Die Anmeldung
-bleibt 30 Tage gültig (`SESSION_DAYS`).
-
-Die App ist eine PWA und lässt sich wie eine normale App auf den
-Startbildschirm legen; sie öffnet dann ohne Browserleiste im Vollbild:
-
-- **iPhone (Safari):** Teilen-Symbol (Quadrat mit Pfeil) antippen, dann
-  «Zum Home-Bildschirm».
-- **Android (Chrome):** Menü (drei Punkte) antippen, dann
-  «App installieren» bzw. «Zum Startbildschirm hinzufügen».
-
-## Alltagsbefehle
-
-Alle Befehle im Ordner `rezepte-app` ausführen.
-
-Status der Container:
-
-```bash
-docker compose ps
-```
-
-Logs live mitlesen (beenden mit Ctrl+C):
-
-```bash
-docker compose logs -f
-```
-
-Zeigt die Ausgaben aller Container; mit einem Namen dahinter nur einen,
-z. B. `docker compose logs -f api`.
-
-Update auf die neuste Version:
-
-```bash
-git pull && docker compose up -d --build
-```
-
-Holt den neuen Code und baut nur die Container neu, die sich geändert
-haben; Datenbank und Fotos bleiben erhalten, Migrationen laufen beim
-Start automatisch.
-
-Stoppen (Daten bleiben erhalten):
-
-```bash
-docker compose down
-```
-
-Hält alle Container an und entfernt sie; Volumes (Datenbank, Fotos,
-Zertifikate) bleiben bestehen. Niemals `docker compose down -v`
-ausführen, das löscht die Volumes und damit alle Daten.
-
-Wieder starten:
-
-```bash
-docker compose up -d
-```
-
-Einzelnen Container neu starten, z. B. nach einer Änderung in `.env`:
+Dann in `.env` `COOKIE_SECURE=true` setzen und ausführen:
 
 ```bash
 docker compose up -d api
 ```
 
-Startet nur `api` neu und übernimmt dabei geänderte Einstellungen.
+Startet `api` mit der neuen Einstellung; das Anmelde-Cookie geht nur
+noch über HTTPS, die Anmeldung intern über `http://` geht nicht mehr.
 
-## Backup
-
-### Was automatisch passiert
-
-Der Container `backup` läuft dauernd mit und erstellt täglich um
-`BACKUP_HOUR` Uhr (Vorgabe 3 Uhr, Zeitzone `TZ`) zwei Dateien im Ordner
-`./backups` auf dem Server:
-
-- `db-JJJJMMTT-HHMMSS.dump`: vollständiger Datenbank-Dump
-  (`pg_dump`, komprimiertes Format)
-- `media-JJJJMMTT-HHMMSS.tar.gz`: Archiv aller Fotos (wird erst
-  geschrieben, wenn Fotos vorhanden sind)
-
-Dateien, die älter als `BACKUP_KEEP_DAYS` Tage sind (Vorgabe 14), werden
-gelöscht. Jede Aktion steht als eine Zeile im Log:
+## Benutzer anlegen
 
 ```bash
-docker compose logs backup
+docker compose exec api python -m app.cli create-user NAME
 ```
 
-Wichtig: `./backups` liegt auf demselben Server. Für ein echtes Backup
-den Ordner regelmässig an einen anderen Ort kopieren, z. B. vom eigenen
-Rechner aus:
+Führt den Befehl im laufenden `api`-Container aus und fragt nach dem
+Passwort.
+
+Passwort ändern:
 
 ```bash
-rsync -av BENUTZER@SERVER:rezepte-app/backups/ ./rezepte-backups/
+docker compose exec api python -m app.cli set-password NAME
 ```
 
-### Backup von Hand
+Alle Anmeldungen auf allen Geräten beenden (z. B. Handy verloren):
 
 ```bash
-docker compose run --rm backup now
+docker compose exec api python -m app.cli purge-sessions
 ```
 
-Startet einen zusätzlichen, einmaligen `backup`-Container, der sofort ein
-Backup schreibt und sich danach wieder entfernt (`--rm`).
+## Als App auf dem Handy
 
-## Wiederherstellen
+Die NPM-Adresse öffnen, anmelden (gilt `SESSION_DAYS` Tage, Vorgabe
+30), dann auf den Startbildschirm legen (braucht HTTPS, intern über
+`http://` bleibt es ein Browser-Lesezeichen):
 
-Voraussetzung: der Stack läuft (`docker compose up -d --build` ist
-durch) und die Backup-Dateien liegen in `./backups`. `DATUM` steht unten
-für den Zeitstempel im Dateinamen, z. B. `20261029-030000`.
+- **iPhone (Safari):** Teilen-Symbol, «Zum Home-Bildschirm».
+- **Android (Chrome):** Menü, «App installieren».
 
-### 1. API anhalten
+## Alltagsbefehle
 
-```bash
-docker compose stop api
-```
-
-Hält nur den `api`-Container an, damit während der Wiederherstellung
-niemand in die Datenbank schreibt.
-
-### 2. Datenbank zurückspielen
-
-```bash
-docker compose exec -T db pg_restore -U rezepte -d rezepte --clean --if-exists --no-owner < backups/db-DATUM.dump
-```
-
-Liest den Dump vom eigenen Rechner (`-T`, Eingabe über die Konsole) und
-spielt ihn im `db`-Container ein; vorhandene Tabellen werden vorher
-gelöscht (`--clean`). Einzelne Meldungen über nicht vorhandene Objekte
-sind normal.
-
-### 3. Fotos zurückspielen (nur wenn ein `media-`Archiv vorhanden ist)
-
-```bash
-docker compose run --rm --entrypoint tar -v "$PWD/backups:/backups" api -xzf /backups/media-DATUM.tar.gz -C /data
-```
-
-Startet einen einmaligen Container mit dem Foto-Volume und entpackt das
-Archiv dort hinein (`--entrypoint tar` ersetzt den normalen Start der
-API durch den Entpack-Befehl).
-
-### 4. Alles wieder starten
-
-```bash
-docker compose up -d
-```
-
-Startet `api` wieder; falls der Dump von einer älteren Programmversion
-stammt, bringen die Migrationen die Datenbank beim Start automatisch auf
-den aktuellen Stand.
-
-## Umzug auf einen anderen Server
-
-1. Auf dem alten Server ein frisches Backup erstellen:
-
-   ```bash
-   docker compose run --rm backup now
-   ```
-
-2. Vom alten Server die Datei `.env` und den Ordner `backups/` sichern,
-   z. B. mit `scp` oder `rsync`.
-
-3. Auf dem neuen Server die Installation wie oben durchführen
-   (`git clone`, `.env` hinüberkopieren, `docker compose up -d --build`).
-   Die Domain darf dabei noch auf den alten Server zeigen; Caddy
-   versucht das Zertifikat einfach erneut, sobald DNS stimmt.
-
-4. Den Ordner `backups/` in den Ordner `rezepte-app` auf dem neuen
-   Server kopieren und die Schritte unter «Wiederherstellen» ausführen.
-
-5. DNS der Domain auf den neuen Server umstellen. Innert einiger Minuten
-   holt Caddy das Zertifikat; danach den alten Server mit
-   `docker compose down` stoppen.
-
-## Entwicklung
-
-Für die Arbeit am Code gibt es `compose.dev.yaml`. In `.env`
-`DOMAIN=localhost` setzen und dann:
-
-```bash
-docker compose -f compose.yaml -f compose.dev.yaml up --build
-```
-
-Startet den Stack im Vordergrund mit Entwicklungs-Einstellungen: der
-Code aus `backend/app` und `frontend/site` ist in die Container
-eingebunden (Änderungen wirken ohne Neubau, die API lädt automatisch
-neu), die Datenbank ist auf `localhost:5432` erreichbar, und die
-API-Dokumentation ist unter `https://localhost/api/docs` eingeschaltet.
-Mit `DOMAIN=localhost` stellt Caddy ein eigenes Zertifikat aus; der
-Browser warnt einmal, danach funktioniert HTTPS wie in Produktion.
-
-Tests des Backends (ohne Docker, mit lokalem Python 3.12):
-
-```bash
-cd backend && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt -r requirements-dev.txt && .venv/bin/pytest
-```
-
-Richtet einmal eine virtuelle Python-Umgebung ein, installiert die
-Abhängigkeiten und führt die Tests aus; später genügt
-`cd backend && .venv/bin/pytest`.
-
-## Fehlersuche
-
-**Seite nicht erreichbar oder Zertifikatsfehler:** Caddy bekommt das
-Zertifikat nur, wenn die Domain per DNS auf den Server zeigt und die
-Ports 80 und 443 von aussen offen sind. Prüfen mit:
-
-```bash
-docker compose logs web
-```
-
-Zeigt die Caddy-Meldungen; bei Problemen mit dem Zertifikat stehen dort
-Hinweise wie «DNS problem» oder «connection refused».
-
-**Ein Container startet nicht:**
+Alle Befehle im Ordner `rezepte-app` ausführen.
 
 ```bash
 docker compose ps
 ```
 
-Zeigt den Zustand; ein Container mit `restarting` oder `exited` hat ein
-Problem. Dann die Logs des betroffenen Containers lesen, z. B.
-`docker compose logs api`.
+Zustand der Container (`running`, `healthy`).
 
-**Start bricht mit «DOMAIN fehlt in .env» oder «DB_PASSWORD fehlt in
-.env» ab:** Die Datei `.env` fehlt oder der Wert ist leer. Siehe
-Schritt 2 der Installation.
+```bash
+docker compose logs -f
+```
 
-**Passwort vergessen:** Neu setzen mit
+Logs aller Container live, beenden mit Ctrl+C. Mit Namen dahinter nur
+einer: `docker compose logs -f api`.
+
+```bash
+git pull && docker compose up -d --build
+```
+
+Update: holt den Code und baut nur die geänderten Container neu.
+Datenbank und Fotos bleiben, Migrationen laufen beim Start.
+
+```bash
+docker compose down
+```
+
+Stoppt und entfernt die Container; Volumes (Datenbank, Fotos)
+bleiben. Nie `docker compose down -v`: löscht die Volumes.
+
+```bash
+docker compose up -d
+```
+
+Startet wieder. Mit Containername dahinter nur diesen, z. B. nach einer
+Änderung in `.env`: `docker compose up -d api`.
+
+## Backup
+
+Der Container `backup` schreibt täglich um `BACKUP_HOUR` Uhr (Vorgabe 3,
+Zeitzone `TZ`) nach `./backups`:
+
+- `db-JJJJMMTT-HHMMSS.dump`: Datenbank (`pg_dump`, komprimiert)
+- `media-JJJJMMTT-HHMMSS.tar.gz`: Fotos (erst wenn welche da sind)
+
+Dateien älter als `BACKUP_KEEP_DAYS` Tage (Vorgabe 14) werden gelöscht.
+Log: `docker compose logs backup`.
+
+`./backups` liegt auf demselben Server. Regelmässig woanders hin
+kopieren, z. B. vom eigenen Rechner:
+
+```bash
+rsync -av BENUTZER@SERVER:rezepte-app/backups/ ./rezepte-backups/
+```
+
+Backup sofort:
+
+```bash
+docker compose run --rm backup now
+```
+
+Startet einen einmaligen `backup`-Container, der nach dem Backup wieder
+entfernt wird (`--rm`).
+
+## Wiederherstellen
+
+Der Stack läuft, die Dateien liegen in `./backups`. `DATUM` steht für
+den Zeitstempel im Dateinamen, z. B. `20261029-030000`.
+
+```bash
+docker compose stop api
+```
+
+Hält `api` an, damit niemand in die Datenbank schreibt.
+
+```bash
+docker compose exec -T db pg_restore -U rezepte -d rezepte --clean --if-exists --no-owner < backups/db-DATUM.dump
+```
+
+Spielt den Dump im `db`-Container ein (`-T`: Eingabe von der Konsole,
+`--clean`: vorhandene Tabellen vorher löschen). Meldungen über nicht
+vorhandene Objekte sind normal.
+
+Nur wenn ein `media-`Archiv vorhanden ist:
+
+```bash
+docker compose run --rm --entrypoint tar -v "$PWD/backups:/backups" api -xzf /backups/media-DATUM.tar.gz -C /data
+```
+
+Entpackt das Archiv in das Foto-Volume (`--entrypoint tar` ersetzt den
+normalen Start der API).
+
+```bash
+docker compose up -d
+```
+
+Startet `api` wieder; ein Dump einer älteren Version wird durch die
+Migrationen aktualisiert.
+
+## Umzug auf einen anderen Server
+
+1. Alter Server: `docker compose run --rm backup now`.
+2. `.env` und `backups/` sichern (`scp` oder `rsync`).
+3. Neuer Server: Installation wie oben, `.env` hinüberkopieren.
+4. `backups/` nach `rezepte-app/` kopieren, «Wiederherstellen»
+   ausführen.
+5. In NPM den Proxy Host auf die neue Server-IP zeigen lassen, dann
+   den alten Server mit `docker compose down` stoppen.
+
+## Entwicklung
+
+```bash
+docker compose -f compose.yaml -f compose.dev.yaml up --build
+```
+
+Stack im Vordergrund: `backend/app` und `frontend/site` sind
+eingebunden (Änderungen wirken ohne Neubau, die API lädt neu), die
+Datenbank ist auf `localhost:5432` erreichbar, API-Doku unter
+`http://localhost:8080/api/docs`.
+
+Backend-Tests ohne Docker (Python 3.12):
+
+```bash
+cd backend && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt -r requirements-dev.txt && .venv/bin/pytest
+```
+
+Richtet die virtuelle Umgebung ein und führt die Tests aus; später
+genügt `cd backend && .venv/bin/pytest`.
+
+## Fehlersuche
+
+**Intern erreichbar, über NPM nicht:** Im Proxy Host Scheme `http`,
+Server-IP und Port 8080 prüfen; `docker compose logs web` zeigt, ob
+Anfragen ankommen.
+
+**Anmeldung geht intern nicht mehr:** `COOKIE_SECURE=true` ist gesetzt;
+dann nur über die NPM-Adresse anmelden.
+
+**Container startet nicht:** `docker compose ps` zeigt `restarting`
+oder `exited`; dann `docker compose logs api` (oder der betroffene
+Name).
+
+**«DB_PASSWORD fehlt in .env»:** `.env` fehlt oder der Wert ist leer.
+
+**Passwort vergessen:**
 `docker compose exec api python -m app.cli set-password NAME`.
 
-**Datenbank-Passwort geändert:** `DB_PASSWORD` in `.env` darf nach dem
-ersten Start nicht mehr geändert werden, da PostgreSQL das Passwort im
-Volume gespeichert hat. Falls doch nötig: im `db`-Container mit
-`docker compose exec db psql -U rezepte -c "ALTER USER rezepte PASSWORD 'NEU';"`
-zuerst in der Datenbank ändern, dann `.env` anpassen und
-`docker compose up -d` ausführen.
+**Datenbank-Passwort ändern:** PostgreSQL hat es im Volume gespeichert.
+Zuerst in der Datenbank ändern:
+`docker compose exec db psql -U rezepte -c "ALTER USER rezepte PASSWORD 'NEU';"`,
+dann `.env` anpassen und `docker compose up -d`.

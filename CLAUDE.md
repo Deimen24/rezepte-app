@@ -14,13 +14,15 @@ Docker-Erfahrung. Ziel ist eine solide, professionelle Lösung.
 - Backend: Python 3.12, FastAPI, SQLAlchemy 2, Alembic, Pydantic v2
 - Datenbank: PostgreSQL
 - Oberfläche: PWA, erste Version HTML/CSS/JS ohne Framework
-- Webserver/HTTPS: Caddy (Let's Encrypt)
+- Webserver: Caddy, nur HTTP im internen Netz. HTTPS und externer
+  Zugriff über einen vorgeschalteten Nginx Proxy Manager (NPM), nicht
+  Teil dieses Repos.
 - Betrieb: Docker Compose, selbst gehostet, keine Cloud-Dienste
 
 ## Regeln
 - Vier Container in `compose.yaml`: web (Caddy), api (FastAPI), db
   (PostgreSQL), backup (pg_dump + Fotos nach ./backups).
-- `.env` hat genau zwei Pflichtwerte: `DOMAIN` und `DB_PASSWORD`.
+- `.env` hat genau einen Pflichtwert: `DB_PASSWORD`.
 - Inbetriebnahme: git clone, .env ausfüllen, `docker compose up -d --build`.
 - `compose.dev.yaml` für Entwicklung (Mounts, Auto-Reload, DB-Port,
   API-Doku unter /api/docs).
@@ -34,6 +36,9 @@ Docker-Erfahrung. Ziel ist eine solide, professionelle Lösung.
 - Code, Kommentare, Commit-Texte: Englisch.
 - README, Oberfläche, Antworten an den Betreiber: Deutsch, Schweizer
   Schreibweise («ss» statt «ß»).
+- Keine Floskeln, nichts Offensichtliches, keine Wiederholungen: weder
+  in README, .env.example, Kommentaren, Oberfläche noch in Antworten.
+  Jeder Satz muss etwas sagen, das der Leser nicht schon weiss.
 
 ## Codestil
 Linux-Kernel-Stil, soweit die Sprache es erlaubt: Tabs mit 8 Zeichen,
@@ -48,8 +53,8 @@ bleiben PascalCase. Python wird mit Tabs eingerückt.
   Endpunkte, Tabellen) und wartet auf das OK des Betreibers.
 - Kleine, nachvollziehbare Commits mit klaren Meldungen.
 - Tests mit pytest. Vor jedem Phasen-Abschluss: Tests grün,
-  `docker compose config` gültig, Caddyfile validiert, Stack lokal mit
-  `DOMAIN=localhost` gestartet.
+  `docker compose config` gültig, Caddyfile validiert, Stack lokal
+  gestartet.
 - Docker-Befehle für den Betreiber immer mit einem Satz erklären.
 - Bei Unklarheit oder zwei guten Lösungen kurz nachfragen statt raten.
   Entscheidungen, die einen späteren Wechsel von Hosting oder

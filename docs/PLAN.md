@@ -78,16 +78,17 @@ Reserviert für Phase 2 (nicht gebaut): `/api/recipes/{id}/notes`,
   Version (Teilwort, Gross/Klein egal), alle Begriffe mit UND.
 - Oberfläche: eine Seite mit Hash-Routen (`#/login`, `#/`,
   `#/recipe/ID`, `#/new`, `#/edit/ID`), kein Build-Schritt.
-- Caddy mit `DOMAIN=localhost` stellt selbst ein internes Zertifikat
-  aus, sonst Let's Encrypt.
+- Caddy liefert nur HTTP auf Port `HTTP_PORT` (Vorgabe 8080) im
+  internen Netz; kein Zertifikat, `auto_https off`. HTTPS und externer
+  Zugriff über Nginx Proxy Manager davor (Betreiberentscheid 29.10.).
+  `COOKIE_SECURE` darum Vorgabe false, einschaltbar in `.env`.
 - Backup-Container: einfache Schleife (täglich), `pg_dump` plus
   tar der Fotos nach `./backups`, Aufbewahrung `BACKUP_KEEP_DAYS`
   (Default 14).
 
 ### Abschlusskriterien
 Tests grün, `docker compose config` gültig, Caddyfile validiert,
-Stack mit `DOMAIN=localhost` gestartet, Rezept über die Oberfläche
-angelegt.
+Stack gestartet, Rezept über die Oberfläche angelegt.
 
 ## Phase 2 – Küche (offen)
 ## Phase 3 – Import (offen)
