@@ -1,13 +1,7 @@
 #!/usr/bin/env bash
 #
-# Daily backup of the Rezepte-App: pg_dump of the database and a tar
-# archive of the media directory into /backups, then prune old files.
-#
-# Usage: backup.sh        loop forever, one backup per day at BACKUP_HOUR
-#        backup.sh now    run one backup immediately and exit
-#
-# Connection settings come from the standard PG* environment variables
-# (PGHOST, PGUSER, PGDATABASE, PGPASSWORD).
+# backup.sh        daily at BACKUP_HOUR: pg_dump and media tar to /backups
+# backup.sh now    once, then exit
 
 set -Eeuo pipefail
 

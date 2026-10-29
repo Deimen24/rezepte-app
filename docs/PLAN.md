@@ -70,21 +70,16 @@ Reserviert für Phase 2 (nicht gebaut): `/api/recipes/{id}/notes`,
                     updated_at}
 
 ### Entscheidungen
-- Volltextsuche in Phase 1 mit `ILIKE` über Titel (own), Intro und
-  Notizen; portabel, damit die Tests auf SQLite laufen. Ein Wechsel auf
-  PostgreSQL-Volltext (`tsvector`) bleibt später möglich, der Aufruf
-  bleibt `?q=`.
+- Volltextsuche mit `ILIKE` über Titel (own), Intro und Notizen, damit
+  die Tests auf SQLite laufen; `tsvector` später hinter demselben `?q=`.
 - Zutatenfilter: je Begriff ein EXISTS auf die Zutaten der eigenen
   Version (Teilwort, Gross/Klein egal), alle Begriffe mit UND.
 - Oberfläche: eine Seite mit Hash-Routen (`#/login`, `#/`,
   `#/recipe/ID`, `#/new`, `#/edit/ID`), kein Build-Schritt.
-- Caddy liefert nur HTTP auf Port `HTTP_PORT` (Vorgabe 8080) im
-  internen Netz; kein Zertifikat, `auto_https off`. HTTPS und externer
-  Zugriff über Nginx Proxy Manager davor (Betreiberentscheid 29.10.).
-  `COOKIE_SECURE` darum Vorgabe false, einschaltbar in `.env`.
-- Backup-Container: einfache Schleife (täglich), `pg_dump` plus
-  tar der Fotos nach `./backups`, Aufbewahrung `BACKUP_KEEP_DAYS`
-  (Default 14).
+- Caddy nur HTTP auf `HTTP_PORT` (8080), `auto_https off`; HTTPS über
+  NPM (Entscheid 29.10.). `COOKIE_SECURE` darum Vorgabe false.
+- Backup: Schleife, täglich `pg_dump` und tar nach `./backups`,
+  Aufbewahrung `BACKUP_KEEP_DAYS` (14).
 
 ### Abschlusskriterien
 Tests grün, `docker compose config` gültig, Caddyfile validiert,

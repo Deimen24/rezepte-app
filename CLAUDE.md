@@ -5,18 +5,15 @@ Projektauftrag steht in `docs/AUFTRAG.md`, der Stand je Phase in
 `docs/PLAN.md`.
 
 ## Kontext
-Private Rezeptsammlung für eine Person, bedient hauptsächlich auf dem
-Handy (iPhone und Android) in der Küche. Der Betreiber ist kein
-Profi-Entwickler, arbeitet ca. 1 Stunde pro Woche daran und hat wenig
-Docker-Erfahrung. Ziel ist eine solide, professionelle Lösung.
+Rezeptsammlung für eine Person, Handy in der Küche. Der Betreiber
+arbeitet ca. 1 Stunde pro Woche daran und hat wenig Docker-Erfahrung.
 
 ## Technologie (fest vorgegeben)
 - Backend: Python 3.12, FastAPI, SQLAlchemy 2, Alembic, Pydantic v2
 - Datenbank: PostgreSQL
 - Oberfläche: PWA, erste Version HTML/CSS/JS ohne Framework
-- Webserver: Caddy, nur HTTP im internen Netz. HTTPS und externer
-  Zugriff über einen vorgeschalteten Nginx Proxy Manager (NPM), nicht
-  Teil dieses Repos.
+- Webserver: Caddy, nur HTTP. HTTPS über Nginx Proxy Manager (NPM)
+  ausserhalb des Repos.
 - Betrieb: Docker Compose, selbst gehostet, keine Cloud-Dienste
 
 ## Regeln
@@ -36,9 +33,10 @@ Docker-Erfahrung. Ziel ist eine solide, professionelle Lösung.
 - Code, Kommentare, Commit-Texte: Englisch.
 - README, Oberfläche, Antworten an den Betreiber: Deutsch, Schweizer
   Schreibweise («ss» statt «ß»).
-- Keine Floskeln, nichts Offensichtliches, keine Wiederholungen: weder
-  in README, .env.example, Kommentaren, Oberfläche noch in Antworten.
-  Jeder Satz muss etwas sagen, das der Leser nicht schon weiss.
+- Keine Floskeln, nichts Offensichtliches, keine Wiederholungen, keine
+  Begründungen des Selbstverständlichen: README, .env.example,
+  Kommentare, Oberfläche, Antworten. Vor jedem Commit alle Texte
+  darauf prüfen.
 
 ## Codestil
 Linux-Kernel-Stil, soweit die Sprache es erlaubt: Tabs mit 8 Zeichen,

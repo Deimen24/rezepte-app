@@ -1,4 +1,4 @@
-# Backup container: pg_dump 17 (matches the db image) plus tar.
+# pg_dump 17 matches the db image.
 FROM postgres:17.11
 
 # tzdata so that BACKUP_HOUR is interpreted in the configured TZ.
