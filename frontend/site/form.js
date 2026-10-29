@@ -13,6 +13,12 @@ const SOURCE_KINDS = [
 	["book", "Buch"],
 	["none", "Keine"],
 ];
+const NUTRITION_FIELDS = [
+	["kcal", "kcal"],
+	["protein_g", "Eiweiss (g)"],
+	["carbs_g", "Kohlenhydrate (g)"],
+	["fat_g", "Fett (g)"],
+];
 
 let toast_timer = null;
 
@@ -120,9 +126,15 @@ export function empty_input()
 		version: {
 			title: "", intro: "", servings: null,
 			prep_minutes: null, cook_minutes: null,
+			nutrition: empty_nutrition(),
 			ingredients: [], steps: [],
 		},
 	};
+}
+
+export function empty_nutrition()
+{
+	return { kcal: null, protein_g: null, carbs_g: null, fat_g: null };
 }
 
 export function recipe_to_input(r)
@@ -246,6 +258,13 @@ function number_input(name, value, extra)
 					  value: str(value) }, extra || {}));
 }
 
+/* "12,5" -> "12.5", "" -> null; the server validates the number. */
+function decimal_or_null(s)
+{
+	const t = String(s).trim().replace(",", ".");
+	return t === "" ? null : t;
+}
+
 /* ------------------------------------------------------------------ */
 /* Fields                                                              */
 /* ------------------------------------------------------------------ */
@@ -290,6 +309,26 @@ function source_fields(src)
 		h("legend", {}, "Quelle"),
 		h("div", { class: "radio-row" }, radios),
 		url_box, book_box);
+	return { el: el, read: read };
+}
+
+/*
+ * Collapsible "Nährwerte pro Portion", open when a value is set.
+ * read() gives the four values as strings or null.
+ */
+function nutrition_fields(n)
+{
+	const inputs = NUTRITION_FIELDS.map(([key, label]) => [label,
+		h("input", { name: key, inputmode: "decimal",
+			     value: fmt_amount(n[key]) })]);
+	const has = inputs.some(([, i]) => i.value !== "");
+	const row = (pairs) => h("div", { class: "row" },
+				 pairs.map(([label, i]) => field(label, i)));
+	const el = h("details", { class: "nutrition", open: has },
+		h("summary", {}, "Nährwerte pro Portion"),
+		row(inputs.slice(0, 2)), row(inputs.slice(2)));
+	const read = () => Object.fromEntries(NUTRITION_FIELDS.map(
+		([key], k) => [key, decimal_or_null(inputs[k][1].value)]));
 	return { el: el, read: read };
 }
 
@@ -426,6 +465,7 @@ export function recipe_form(data, cats, opts)
 	const servings = number_input("servings", v.servings);
 	const prep = number_input("prep_minutes", v.prep_minutes);
 	const cook = number_input("cook_minutes", v.cook_minutes);
+	const nutrition = nutrition_fields(v.nutrition || empty_nutrition());
 	const intro = h("textarea", { name: "intro", rows: 3 }, v.intro || "");
 	const ings = list_editor(v.ingredients || [], ingredient_row,
 				 "+ Zutat");
@@ -445,6 +485,7 @@ export function recipe_form(data, cats, opts)
 			servings: int_or_null(servings.value),
 			prep_minutes: int_or_null(prep.value),
 			cook_minutes: int_or_null(cook.value),
+			nutrition: nutrition.read(),
 			ingredients: read_ingredients(ings.box),
 			steps: read_steps(steps.box),
 		},
@@ -469,6 +510,7 @@ export function recipe_form(data, cats, opts)
 			field("Portionen", servings),
 			field("Vorbereitung (Min.)", prep),
 			field("Kochen (Min.)", cook)),
+		nutrition.el,
 		field("Einleitung", intro),
 		h("h2", {}, "Zutaten"),
 		ings.box,

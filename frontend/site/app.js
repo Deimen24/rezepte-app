@@ -14,6 +14,9 @@ import {
 	h, toast, error_msg, field, back_button, topbar, str, fmt_amount,
 	split_csv, empty_input, recipe_to_input, recipe_form,
 } from "./form.js";
+import {
+	can_scale, scaled_ingredients, servings_stepper, load_servings,
+} from "./scale.js";
 
 const DEBOUNCE_MS = 300;
 const LOADING_DELAY_MS = 150;
@@ -44,7 +47,8 @@ const ROUTES = [
 	[/^#\/edit\/(\d+)$/, view_form],
 	[/^#\/import(?:\?(.*))?$/, view_import_route],
 	[/^#\/cook\/(\d+)$/, (id) => view_cook(id, {
-		h: h, navigate: navigate, ingredient_text: ingredient_text })],
+		h: h, navigate: navigate, toast: toast,
+		ingredient_text: ingredient_text })],
 ];
 
 let render_seq = 0;
@@ -444,7 +448,39 @@ function ingredient_item(i)
 		h("span", {}, i.name, note));
 }
 
-function version_section(v)
+/* "pro Portion: 420 kcal · E 12 g · KH 55 g · F 15 g" */
+function nutrition_line(n)
+{
+	if (!n)
+		return null;
+	const part = (label, v, unit) =>
+		v === null || v === undefined || v === "" ?
+		"" : join_present([label, fmt_amount(v), unit], " ");
+	const text = join_present([
+		part("", n.kcal, "kcal"),
+		part("E", n.protein_g, "g"),
+		part("KH", n.carbs_g, "g"),
+		part("F", n.fat_g, "g"),
+	], " · ");
+	return text ? h("p", { class: "meta-line nutrition" },
+			"pro Portion: " + text) : null;
+}
+
+/*
+ * Ingredient list with the stepper above it when the version has a
+ * portion count. The chosen count is kept per recipe (scale.js) and
+ * only changes the display, never the recipe.
+ */
+function ingredients_block(id, v)
+{
+	const ul = h("ul", { class: "ingredients" });
+	const draw = (n) => ul.replaceChildren(
+		...scaled_ingredients(v, n).map(ingredient_item));
+	draw(load_servings(id, v.servings));
+	return [can_scale(v) ? servings_stepper(h, id, v, draw) : null, ul];
+}
+
+function version_section(id, v)
 {
 	const facts = join_present([
 		v.servings ? v.servings + " Portionen" : "",
@@ -454,10 +490,10 @@ function version_section(v)
 	], " · ");
 	return h("section", {},
 		facts ? h("p", { class: "meta-line" }, facts) : null,
+		nutrition_line(v.nutrition),
 		v.intro ? h("p", { class: "intro" }, v.intro) : null,
 		h("h2", {}, "Zutaten"),
-		h("ul", { class: "ingredients" },
-			(v.ingredients || []).map(ingredient_item)),
+		ingredients_block(id, v),
 		h("h2", {}, "Zubereitung"),
 		h("ol", { class: "steps" },
 			(v.steps || []).map(s => h("li", {}, s.text))));
@@ -745,14 +781,14 @@ function detail_el(r, opts)
 {
 	let show_original = false;
 	const title = h("h1", {}, r.own.title);
-	const body = h("div", {}, version_section(r.own));
+	const body = h("div", {}, version_section(r.id, r.own));
 	const toggle = h("button", { type: "button", onclick: () => {
 		show_original = !show_original;
 		const v = show_original ? r.original : r.own;
 		title.textContent = v.title;
 		toggle.textContent = show_original ?
 			"Eigene Version anzeigen" : "Original anzeigen";
-		body.replaceChildren(version_section(v));
+		body.replaceChildren(version_section(r.id, v));
 	} }, "Original anzeigen");
 	const cat = r.category ? r.category.name : "";
 	const tags = (r.tags || []).map(t => "#" + t).join(" ");

@@ -483,6 +483,53 @@ fieldset {
 	white-space: pre-wrap;
 }
 
+/* Portion stepper */
+.stepper {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 8px;
+}
+
+.stepper button {
+	padding: 0;
+	font-size: 1.4rem;
+	line-height: 1;
+}
+
+.stepper-value {
+	min-width: 7.5rem;
+	text-align: center;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+}
+
+/* Nutrition in the form */
+details.nutrition {
+	margin-bottom: var(--gap);
+}
+
+details.nutrition summary {
+	cursor: pointer;
+	min-height: var(--touch);
+	display: flex;
+	align-items: center;
+	color: var(--fg-muted);
+}
+
+details.nutrition summary::before {
+	content: "▸";
+	margin-right: 8px;
+}
+
+details.nutrition[open] summary::before {
+	content: "▾";
+}
+
+details.nutrition .row label {
+	margin-bottom: 4px;
+}
+
 /* Favorite star in the top bar */
 .fav {
 	font-size: 1.5rem;
@@ -742,6 +789,100 @@ fieldset {
 	color: var(--fg);
 	background: var(--bg-card);
 	font-weight: 600;
+}
+
+.cook .stepper {
+	margin-bottom: var(--gap);
+}
+
+/* Timers */
+.timerbar {
+	position: sticky;
+	top: calc(var(--touch) + 12px + env(safe-area-inset-top));
+	z-index: 9;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 6px var(--gap);
+	background: var(--bg);
+	border-bottom: 1px solid var(--line);
+}
+
+.timer {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 4px 4px 4px 12px;
+	background: var(--bg-card);
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+}
+
+.timer-label {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 0.9rem;
+	color: var(--fg-muted);
+}
+
+.timer-time {
+	font-size: 1.3rem;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+}
+
+.timer button {
+	min-height: 40px;
+	padding: 0 12px;
+}
+
+.timer.done {
+	background: var(--danger);
+	border-color: var(--danger);
+	color: #fff;
+}
+
+.timer.done .timer-label {
+	color: #fff;
+}
+
+.timer.done button {
+	background: rgba(255, 255, 255, 0.9);
+	color: #000;
+	border: none;
+}
+
+.timers {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+
+.timers:not(:empty) {
+	margin-top: var(--gap);
+}
+
+.timers-label {
+	font-size: 0.9rem;
+	color: var(--fg-muted);
+}
+
+.btn-timer {
+	min-height: 40px;
+	padding: 0 14px;
+	border-radius: 20px;
+	border-color: var(--accent);
+	color: var(--accent);
+	font-weight: 600;
+}
+
+.btn-timer:disabled {
+	opacity: 0.5;
+	cursor: default;
 }
 
 .cookbar {
