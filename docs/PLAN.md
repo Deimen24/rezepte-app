@@ -154,4 +154,102 @@ Fehlerfälle (fremde Rezept-ID, zu grosse Datei, kein Bild).
   Stand nach Reload), Export-Link.
 - Offen: Stack-Start beim Betreiber, Foto-Upload vom echten iPhone.
 
-## Phase 3 – Import (offen)
+## Phase 3 – Import (Plan, wartet auf OK)
+
+### Dateien
+    backend/requirements.txt: + httpx, beautifulsoup4
+    backend/app/importer/fetch.py        URL laden mit Schutz
+    backend/app/importer/jsonld.py       schema.org/Recipe
+    backend/app/importer/heuristic.py    Fallback aus HTML
+    backend/app/importer/ingredients.py  Zutatenzeile zerlegen
+    backend/app/importer/duration.py     ISO 8601 (PT1H30M) → Minuten
+    backend/app/services/importer.py     Ablauf: laden, parsen, Vorschau
+    backend/app/services/photos.py       + add_photo_from_url
+    backend/app/routers/importer.py
+    backend/app/schemas.py               ImportIn, ImportPreview,
+                                         IngredientLinesIn, PhotoUrlIn
+    backend/tests/fixtures/*.html, *.json
+    backend/tests/test_{jsonld,heuristic,ingredients,duration,fetch,
+                        import_api}.py
+    frontend/site/import.js              Ansicht #/import
+    frontend/site/app.js, api.js, style.css, sw.js, manifest
+
+### Tabellen
+Keine neue Migration. Quelle landet in `recipes.source_*`, Original in
+`recipe_versions` (kind original), wie bisher.
+
+### Endpunkte (mit Login)
+| Methode | Pfad | Zweck |
+|---------|------|-------|
+| POST | /api/import/fetch | `{url}` → ImportPreview, speichert nichts |
+| POST | /api/import/ingredients | `{lines: [str]}` → `[IngredientIn + raw]`, für eingefügten Text (Buch) und Nachbearbeitung |
+| POST | /api/recipes/{id}/photos/url | `{url}` → PhotoOut, lädt das Rezeptbild nach dem Speichern |
+
+Speichern läuft über das bestehende `POST /api/recipes` mit
+`source.kind = "url"`.
+
+### JSON-Formen
+    ImportPreview {source: Source, version: VersionIn-Form mit
+                   ingredients: [{amount, unit, name, note, raw}],
+                   image_url | null, method: "jsonld" | "heuristic",
+                   warnings: [str]}
+
+### Laden (fetch.py)
+- Nur http/https, max. 5 Weiterleitungen, 10 s, 5 MB, nur `text/html`.
+- Ziel-IP aufgelöst und geprüft: keine privaten, Loopback-, Link-Local-
+  oder Metadaten-Adressen (SSRF). Fehler → 422 mit Grund.
+- Eigener User-Agent; kein JavaScript-Rendering.
+
+### JSON-LD (jsonld.py)
+- Alle `<script type="application/ld+json">`, auch `@graph` und
+  Listen; `@type` "Recipe" als String oder in Liste.
+- Felder: name, description, recipeYield (Zahl aus «4 Portionen»),
+  prepTime/cookTime/totalTime (ISO 8601), recipeIngredient,
+  recipeInstructions (String, Liste von Strings, HowToStep,
+  HowToSection mit itemListElement), image (String, Liste, ImageObject).
+- HTML-Entities und Tags im Text entfernt.
+
+### Heuristik (heuristic.py)
+- Titel: og:title, sonst `<h1>`, sonst `<title>`.
+- Zutaten: erste `<ul>`/`<ol>` nach einer Überschrift mit «Zutaten»,
+  «Ingredients»; sonst die Liste mit den meisten Zeilen, die mit einer
+  Zahl beginnen.
+- Schritte: `<ol>` nach «Zubereitung», «Anleitung», «Instructions»,
+  «Method»; sonst Absätze nach dieser Überschrift bis zur nächsten.
+- Jede Unsicherheit als Eintrag in `warnings` («Schritte geraten»).
+
+### Zutatenzeile (ingredients.py)
+- Menge: `250`, `1.5`, `1,5`, `1/2`, `½`, `1 ½`, Bereich `2-3` → 2 mit
+  Hinweis «2–3» in note.
+- Einheiten DE/EN mit Normalisierung: g, kg, ml, dl, l, EL, TL, Prise,
+  Stück, Bund, Zehe(n), Dose, Pck., Tasse, cup(s), tbsp, tsp, oz, lb.
+- Rest = Name; Klammern und Text nach dem ersten Komma → note.
+- `raw` bleibt immer erhalten, Original-Version übernimmt `raw` als
+  Name, wenn der Parser nichts zerlegen kann.
+
+### Oberfläche
+- `#/import` (Knopf «Import» neben «+ Neu»): URL-Feld, «Laden»;
+  Vorschau = das bestehende Formular, vorbefüllt, darüber Zeile mit
+  Methode und Warnungen, Bild mit Häkchen «Bild übernehmen»;
+  «Speichern» → POST /api/recipes, dann Bild nach `photos/url`.
+- `#/import?url=…` befüllt das Feld und lädt sofort (Vorbereitung für
+  Share Target und iOS-Kurzbefehl, beide noch nicht gebaut).
+- Im Formular (neu/bearbeiten): «Zutaten einfügen» öffnet ein
+  Textfeld; Zeilen gehen an `/api/import/ingredients` und werden zu
+  Zutatenzeilen (für Buchrezepte).
+
+### Tests
+- jsonld: Fixtures mit einfachem Recipe, `@graph`, Typ-Liste,
+  HowToSection, ImageObject, recipeYield als Text, Entities.
+- heuristic: zwei HTML-Fixtures (Überschriften DE/EN) und eine ohne
+  Überschriften; Warnungen vorhanden.
+- ingredients: Tabelle mit rund 40 Zeilen DE/EN, Brüche, Bereiche,
+  ohne Menge, Klammern.
+- duration: PT30M, PT1H30M, P0DT2H, ungültig → None.
+- fetch: httpx MockTransport für Weiterleitung, zu gross, falscher
+  Typ, Timeout; private Adressen abgelehnt (DNS gemockt).
+- API: Vorschau speichert nichts (Rezeptanzahl gleich), 401, 422 bei
+  ungültiger URL; photos/url legt Foto an; Speichern aus Vorschau
+  ergibt Original = Vorschau.
+
+
