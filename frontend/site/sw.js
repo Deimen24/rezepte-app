@@ -1,11 +1,11 @@
 /*
  * Minimal service worker: precache the app shell, serve it cache-first
- * and never touch /api or /media (network only).
+ * and never touch /api, /media or /share/ photos (network only).
  *
  * Bump CACHE_VERSION whenever a shell file changes.
  */
 
-const CACHE_VERSION = "v4";
+const CACHE_VERSION = "v5";
 const CACHE_NAME = "rezepte-shell-" + CACHE_VERSION;
 
 const SHELL = [
@@ -17,6 +17,8 @@ const SHELL = [
 	"/form.js",
 	"/import.js",
 	"/scale.js",
+	"/share.js",
+	"/shopping.js",
 	"/style.css",
 	"/manifest.webmanifest",
 	"/icons/icon-192.png",
@@ -25,7 +27,8 @@ const SHELL = [
 	"/icons/apple-touch-icon.png",
 ];
 
-const NETWORK_ONLY = ["/api/", "/media/"];
+/* "/share/" are public photos; the bare share target "/share" is the shell. */
+const NETWORK_ONLY = ["/api/", "/media/", "/share/"];
 
 self.addEventListener("install", (ev) => {
 	ev.waitUntil(
@@ -54,7 +57,8 @@ function is_network_only(url)
 function shell_path(url)
 {
 	/* Any navigation inside the app resolves to the shell. */
-	return url.pathname === "/" || url.pathname.endsWith(".html")
+	return url.pathname === "/" || url.pathname.endsWith(".html") ||
+	       url.pathname === "/share"
 		? "/index.html" : url.pathname;
 }
 

@@ -3,13 +3,15 @@
  *
  * Every call sends the session cookie. Errors are thrown as Error
  * with the server's "detail" as message. A 401 on any call except
- * login fires UNAUTHORIZED_EVENT on window so the app can show the
- * login screen. A FormData body is sent as multipart without a JSON
+ * the public ones fires UNAUTHORIZED_EVENT on window so the app can
+ * show the login screen. A FormData body is sent as multipart without a JSON
  * content type.
  */
 
 const API_BASE = "/api";
 const LOGIN_PATH = "/auth/login";
+/* Paths that work without a session: a 401 there is not a logout. */
+const PUBLIC_PREFIXES = [LOGIN_PATH, "/share/"];
 
 export const UNAUTHORIZED_EVENT = "api:unauthorized";
 
@@ -32,12 +34,17 @@ export async function api(method, path, body)
 	} catch (e) {
 		throw new Error("Keine Verbindung zum Server");
 	}
-	if (res.status === 401 && path !== LOGIN_PATH)
+	if (res.status === 401 && !is_public(path))
 		window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT));
 	const data = await read_body(res);
 	if (!res.ok)
 		throw new Error(error_detail(data, res.status));
 	return data;
+}
+
+function is_public(path)
+{
+	return PUBLIC_PREFIXES.some(p => path.startsWith(p));
 }
 
 async function read_body(res)
@@ -206,4 +213,110 @@ export function parse_ingredients(lines)
 export function add_photo_from_url(id, url)
 {
 	return api("POST", recipe_path(id, "/photos/url"), { url });
+}
+
+/* -> ImportPreview with method "ocr"; saves nothing */
+export function import_photo(file)
+{
+	const fd = new FormData();
+	fd.append("file", file, file.name || "seite.jpg");
+	return api("POST", "/import/photo", fd);
+}
+
+/* ---- shopping list ---- */
+
+function shopping_path(id, sub)
+{
+	return "/shopping/" + encodeURIComponent(id) + (sub || "");
+}
+
+export function list_shopping()
+{
+	return api("GET", "/shopping");
+}
+
+/* item: {name, unit, amount, note} */
+export function add_shopping(item)
+{
+	return api("POST", "/shopping", item);
+}
+
+/* factor scales the amounts: 2 of 4 portions is 0.5 */
+export function add_shopping_from_recipe(id, factor)
+{
+	return api("POST", "/shopping/from-recipe/" + encodeURIComponent(id),
+		   { factor: factor });
+}
+
+export function update_shopping(id, item)
+{
+	return api("PUT", shopping_path(id), item);
+}
+
+export function set_shopping_checked(id, checked)
+{
+	return api("PUT", shopping_path(id, "/checked"),
+		   { checked: !!checked });
+}
+
+export function remove_shopping(id)
+{
+	return api("DELETE", shopping_path(id));
+}
+
+export function clear_checked_shopping()
+{
+	return api("DELETE", "/shopping/checked");
+}
+
+/* ---- pantry ---- */
+
+export function list_pantry()
+{
+	return api("GET", "/pantry");
+}
+
+export function add_pantry(name)
+{
+	return api("POST", "/pantry", { name });
+}
+
+export function remove_pantry(id)
+{
+	return api("DELETE", "/pantry/" + encodeURIComponent(id));
+}
+
+/* ---- sharing ---- */
+
+export function get_share(id)
+{
+	return api("GET", recipe_path(id, "/share"));
+}
+
+export function enable_share(id)
+{
+	return api("POST", recipe_path(id, "/share"));
+}
+
+export function disable_share(id)
+{
+	return api("DELETE", recipe_path(id, "/share"));
+}
+
+/* Public: no session needed, a 401 does not log out. */
+export function get_shared(token)
+{
+	return api("GET", "/share/" + encodeURIComponent(token));
+}
+
+/* ---- Microsoft To Do ---- */
+
+export function todo_status()
+{
+	return api("GET", "/todo/status");
+}
+
+export function todo_push()
+{
+	return api("POST", "/todo/push");
 }

@@ -25,6 +25,12 @@
 	handle /media/* {
 		reverse_proxy api:8000
 	}
+	# Public photos of shared recipes; the bare /share (share target)
+	# stays the app shell below.
+	@share_photos path /share/*/photos/*
+	handle @share_photos {
+		reverse_proxy api:8000
+	}
 
 	# Static files with SPA fallback for non-file routes.
 	handle {

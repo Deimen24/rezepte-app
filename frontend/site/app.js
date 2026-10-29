@@ -2,14 +2,17 @@
  * Recipe app: hash router and views. No framework, no build step.
  *
  * Routes: #/login, #/ (list), #/recipe/ID, #/new, #/edit/ID,
- * #/cook/ID (cook.js), #/import (import.js). All user text is
- * rendered through h() / textContent, never innerHTML. DOM helpers
- * and the recipe form live in form.js.
+ * #/cook/ID (cook.js), #/import (import.js), #/shopping and
+ * #/pantry (shopping.js), #/s/TOKEN (share.js, public). All user
+ * text is rendered through h() / textContent, never innerHTML. DOM
+ * helpers and the recipe form live in form.js.
  */
 
 import * as API from "./api.js";
 import { view_cook } from "./cook.js";
 import { view_import } from "./import.js";
+import { view_shopping, view_pantry } from "./shopping.js";
+import { view_shared } from "./share.js";
 import {
 	h, toast, error_msg, field, back_button, topbar, str, fmt_amount,
 	split_csv, empty_input, recipe_to_input, recipe_form,
@@ -23,9 +26,14 @@ const LOADING_DELAY_MS = 150;
 const RATING_MAX = 5;
 /* Hash suffix set by cooking mode: open the cook-log form. */
 const COOKED_FLAG = "?cooked";
+/* Share target (manifest): /share?url=... lands on the import page. */
+const SHARE_TARGET_PATH = "/share";
+const URL_RE = /https?:\/\/[^\s<>"']+/;
+const FACTOR_DECIMALS = 3;
 
+/* user: undefined = not asked yet, null = not logged in */
 const state = {
-	user: null,
+	user: undefined,
 	categories: [],
 	tags: [],
 };
@@ -49,7 +57,13 @@ const ROUTES = [
 	[/^#\/cook\/(\d+)$/, (id) => view_cook(id, {
 		h: h, navigate: navigate, toast: toast,
 		ingredient_text: ingredient_text })],
+	[/^#\/shopping$/, view_shopping],
+	[/^#\/pantry$/, view_pantry],
+	[/^#\/s\/([A-Za-z0-9_-]+)$/, view_shared_route],
 ];
+
+/* Views that work without a session. */
+const PUBLIC_VIEWS = [view_login, view_shared_route];
 
 let render_seq = 0;
 
@@ -165,6 +179,21 @@ function find_route(hash)
 	return null;
 }
 
+function is_public(hash)
+{
+	const r = find_route(hash);
+	return !!r && PUBLIC_VIEWS.includes(r.view);
+}
+
+async function load_user()
+{
+	try {
+		state.user = await API.me();
+	} catch (e) {
+		state.user = null;
+	}
+}
+
 async function render()
 {
 	const seq = ++render_seq;
@@ -172,7 +201,12 @@ async function render()
 	const r = find_route(hash);
 	if (!r)
 		return navigate("#/");
-	if (!state.user && r.view !== view_login)
+	const pub = PUBLIC_VIEWS.includes(r.view);
+	if (!pub && state.user === undefined)
+		await load_user();
+	if (seq !== render_seq)
+		return;
+	if (!state.user && !pub)
 		return navigate("#/login");
 	if (state.user && r.view === view_login)
 		return navigate("#/");
@@ -397,7 +431,8 @@ async function view_list()
 			h("a", { class: "btn btn-primary", href: "#/new" },
 				"+ Neu"),
 			h("a", { class: "btn", href: "#/import" }, "Import"),
-			menu(h("a", { href: API.export_url(),
+			menu(h("a", { href: "#/shopping" }, "Einkaufsliste"),
+			     h("a", { href: API.export_url(),
 				      download: "rezepte.zip" }, "Export"),
 			     h("button", { type: "button", onclick: logout },
 			       "Abmelden"))),
@@ -775,6 +810,135 @@ function notes_section(r)
 		note_form(r.id));
 }
 
+/* ---- shopping list and sharing ---- */
+
+/*
+ * Amounts scaled like the detail view: chosen portions over the
+ * version's portions, 1 without a portion count.
+ */
+function shopping_factor(r)
+{
+	const v = r.own;
+	if (!can_scale(v))
+		return 1;
+	const f = load_servings(r.id, v.servings) / v.servings;
+	return Number(f.toFixed(FACTOR_DECIMALS));
+}
+
+function shopping_button(r)
+{
+	return h("button", { type: "button", onclick: async (ev) => {
+		const btn = ev.currentTarget;
+		btn.disabled = true;
+		try {
+			const items = await API.add_shopping_from_recipe(
+				r.id, shopping_factor(r));
+			toast(items.length + " Zutaten auf der Liste", false);
+		} catch (e) {
+			toast(error_msg(e), true);
+		} finally {
+			btn.disabled = false;
+		}
+	} }, "Einkaufsliste");
+}
+
+function share_url(s)
+{
+	return location.origin + s.path;
+}
+
+async function copy_link(url)
+{
+	try {
+		await navigator.clipboard.writeText(url);
+		toast("Link kopiert", false);
+	} catch (e) {
+		toast(url, false);
+	}
+}
+
+/* System share sheet when there is one, else the clipboard. */
+async function send_link(url)
+{
+	if (!navigator.share)
+		return copy_link(url);
+	try {
+		await navigator.share({ url: url });
+	} catch (e) {
+		/* cancelled */
+	}
+}
+
+/*
+ * Bottom sheet with a few actions, closed by a tap outside or
+ * «Abbrechen». Each action closes it first.
+ */
+function sheet(...items)
+{
+	const close = () => box.remove();
+	const wrap = (b) => {
+		b.addEventListener("click", close);
+		return b;
+	};
+	const box = h("div", { class: "sheet-bg", onclick: (ev) => {
+		if (ev.target === box)
+			close();
+	} },
+		h("div", { class: "sheet", role: "dialog" },
+			items.filter(Boolean).map(wrap),
+			h("button", { type: "button", onclick: close },
+				"Abbrechen")));
+	document.body.append(box);
+}
+
+async function disable_share(id)
+{
+	try {
+		await API.disable_share(id);
+		toast("Link gelöscht", false);
+	} catch (e) {
+		toast(error_msg(e), true);
+	}
+}
+
+function share_sheet(id, url)
+{
+	sheet(h("button", { type: "button", onclick: () => copy_link(url) },
+		"Link kopieren"),
+	      navigator.share ? h("button", { type: "button",
+					       onclick: () => send_link(url) },
+				   "Teilen") : null,
+	      h("button", { type: "button", class: "btn-danger",
+			    onclick: () => disable_share(id) },
+		"Link löschen"));
+}
+
+async function share_recipe(id)
+{
+	let s = await API.get_share(id);
+	if (s.token)
+		return share_sheet(id, share_url(s));
+	if (!confirm("Link erzeugen?"))
+		return;
+	s = await API.enable_share(id);
+	await send_link(share_url(s));
+}
+
+function share_button(r)
+{
+	return h("button", { type: "button", onclick: async (ev) => {
+		const btn = ev.currentTarget;
+		btn.disabled = true;
+		try {
+			await share_recipe(r.id);
+		} catch (e) {
+			toast(error_msg(e), true);
+		} finally {
+			btn.disabled = false;
+		}
+	} }, "Teilen");
+}
+
 /* ---- page ---- */
 
 function detail_el(r, opts)
@@ -806,7 +970,9 @@ function detail_el(r, opts)
 			photo_section(r),
 			h("div", { class: "actions" },
 				h("a", { class: "btn btn-primary",
-					 href: "#/cook/" + r.id }, "Kochen")),
+					 href: "#/cook/" + r.id }, "Kochen"),
+				shopping_button(r),
+				share_button(r)),
 			body,
 			h("div", { class: "actions" },
 				toggle,
@@ -869,8 +1035,35 @@ async function view_import_route(query)
 }
 
 /* ------------------------------------------------------------------ */
+/* Public page                                                         */
+/* ------------------------------------------------------------------ */
+
+function view_shared_route(token)
+{
+	return view_shared(token, { version_section: version_section });
+}
+
+/* ------------------------------------------------------------------ */
 /* Startup                                                             */
 /* ------------------------------------------------------------------ */
+
+/*
+ * Android share target: /share?url=...&text=... (manifest). Take the
+ * url, or the first link in the text, and open the import page under
+ * the app's own path.
+ */
+function share_target()
+{
+	if (location.pathname !== SHARE_TARGET_PATH)
+		return;
+	const q = new URLSearchParams(location.search);
+	const text = [q.get("url"), q.get("text"), q.get("title")]
+		.filter(Boolean).join(" ");
+	const m = text.match(URL_RE);
+	const hash = "#/import" + (m ? "?url=" + encodeURIComponent(m[0])
+				      : "");
+	history.replaceState(null, "", "/" + hash);
+}
 
 function register_sw()
 {
@@ -879,22 +1072,16 @@ function register_sw()
 	navigator.serviceWorker.register("/sw.js").catch(() => {});
 }
 
-async function start()
+function start()
 {
 	window.addEventListener(API.UNAUTHORIZED_EVENT, () => {
-		if (state.user !== null) {
+		if (state.user && !is_public(location.hash)) {
 			state.user = null;
 			navigate("#/login");
 		}
 	});
 	window.addEventListener("hashchange", render);
-	try {
-		state.user = await API.me();
-	} catch (e) {
-		state.user = null;
-	}
-	if (!state.user && location.hash !== "#/login")
-		location.hash = "#/login";
+	share_target();
 	render();
 	register_sw();
 }

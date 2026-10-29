@@ -1,8 +1,8 @@
 /*
- * Import from a URL (#/import, #/import?url=...): fetch a preview
- * through the API and show it in the shared recipe form. Saving
- * creates the recipe and, when wanted, loads the page's image as
- * first photo.
+ * Import from a URL (#/import, #/import?url=...) or from a photo of
+ * a book page (text recognition): fetch a preview through the API and
+ * show it in the shared recipe form. Saving creates the recipe and,
+ * when wanted, loads the page's image as first photo.
  *
  * app.js passes ui = { navigate, categories }.
  */
@@ -15,7 +15,9 @@ import {
 const METHOD_LABEL = {
 	jsonld: "schema.org",
 	heuristic: "Geraten",
+	ocr: "Texterkennung",
 };
+const BOOK_SOURCE = { kind: "book", url: "", book: "", page: null };
 
 function url_from_query(query)
 {
@@ -24,7 +26,10 @@ function url_from_query(query)
 	return new URLSearchParams(query).get("url") || "";
 }
 
-/* Preview (ImportPreview) -> RecipeInput-like object for the form. */
+/*
+ * Preview (ImportPreview) -> RecipeInput-like object for the form. A
+ * page photo gets a book source with empty title and page.
+ */
 function preview_to_input(p, url)
 {
 	const src = p.source || {};
@@ -32,8 +37,9 @@ function preview_to_input(p, url)
 		category_id: null,
 		tags: [],
 		favorite: false,
-		source: { kind: "url", url: src.url || url, book: "",
-			  page: null },
+		source: p.method === "ocr" ? Object.assign({}, BOOK_SOURCE)
+			: { kind: "url", url: src.url || url, book: "",
+			    page: null },
 		version: p.version,
 	};
 }
@@ -45,8 +51,9 @@ function preview_head(p)
 		h("p", { class: "preview-head" },
 			h("span", { class: "method" },
 				METHOD_LABEL[p.method] || p.method),
-			h("span", {}, warnings.length
-				? warnings.length + " Hinweise" : "Vorschau")),
+			h("span", {}, warnings.length === 1 ? "1 Hinweis"
+				: warnings.length ? warnings.length + " Hinweise"
+				: "Vorschau")),
 		warnings.length
 			? h("ul", { class: "warnings" },
 				warnings.map(w => h("li", {}, w)))
@@ -96,6 +103,41 @@ function preview_el(p, url, ui)
 	return h("div", {}, preview_head(p), img.el, form);
 }
 
+/*
+ * «Buchseite fotografieren»: the camera (or a saved image) goes to
+ * /import/photo and comes back as the same preview.
+ */
+function photo_form(preview, ui)
+{
+	const btn = h("button", { type: "button" }, "Foto");
+	const file = h("input", { type: "file", accept: "image/*",
+				  capture: "environment", class: "hidden",
+				  "aria-label": "Buchseite fotografieren",
+				  onchange: async (ev) => {
+		const f = ev.target.files && ev.target.files[0];
+		if (!f)
+			return;
+		btn.disabled = true;
+		btn.replaceChildren(h("span", { class: "spinner" }),
+				    "Lesen …");
+		preview.replaceChildren();
+		try {
+			const p = await API.import_photo(f);
+			preview.replaceChildren(preview_el(p, "", ui));
+		} catch (e) {
+			toast(error_msg(e), true);
+		} finally {
+			btn.disabled = false;
+			btn.replaceChildren("Foto");
+			ev.target.value = "";
+		}
+	} });
+	btn.addEventListener("click", () => file.click());
+	return h("div", { class: "import-photo" },
+		h("span", { class: "field-label" }, "Buchseite fotografieren"),
+		btn, file);
+}
+
 export function view_import(query, ui)
 {
 	const url = h("input", { name: "url", type: "url", inputmode: "url",
@@ -132,5 +174,5 @@ export function view_import(query, ui)
 		fetch_preview();
 	return h("div", {},
 		topbar("Import", back_button("#/")),
-		h("main", {}, form, preview));
+		h("main", {}, form, photo_form(preview, ui), preview));
 }
