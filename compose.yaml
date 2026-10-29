@@ -1,0 +1,98 @@
+# Rezepte-App: production stack. Start with `docker compose up -d --build`.
+# Required values in .env: DOMAIN and DB_PASSWORD (see .env.example).
+name: rezepte
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  web:
+    build: ./frontend
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      DOMAIN: "${DOMAIN:?DOMAIN fehlt in .env}"
+      TZ: "${TZ:-Europe/Zurich}"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      DB_PASSWORD: "${DB_PASSWORD:?DB_PASSWORD fehlt in .env}"
+      MEDIA_DIR: /data/media
+      SESSION_DAYS: "${SESSION_DAYS:-30}"
+      COOKIE_SECURE: "true"
+      API_DOCS: "false"
+      TZ: "${TZ:-Europe/Zurich}"
+    volumes:
+      - media:/data/media
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          python -c "import urllib.request as u;
+          u.urlopen('http://127.0.0.1:8000/api/health')"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  db:
+    image: postgres:17.11
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      POSTGRES_USER: rezepte
+      POSTGRES_DB: rezepte
+      POSTGRES_PASSWORD: "${DB_PASSWORD:?DB_PASSWORD fehlt in .env}"
+      TZ: "${TZ:-Europe/Zurich}"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rezepte -d rezepte"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+  backup:
+    build: ./backup
+    restart: unless-stopped
+    init: true
+    logging: *logging
+    environment:
+      PGHOST: db
+      PGUSER: rezepte
+      PGDATABASE: rezepte
+      PGPASSWORD: "${DB_PASSWORD:?DB_PASSWORD fehlt in .env}"
+      BACKUP_KEEP_DAYS: "${BACKUP_KEEP_DAYS:-14}"
+      BACKUP_HOUR: "${BACKUP_HOUR:-3}"
+      TZ: "${TZ:-Europe/Zurich}"
+    volumes:
+      - media:/data/media:ro
+      - ./backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db_data:
+  media:
+  caddy_data:
+  caddy_config:

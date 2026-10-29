@@ -1,0 +1,32 @@
+# Development overrides. Use together with compose.yaml:
+#   docker compose -f compose.yaml -f compose.dev.yaml up --build
+# Code is mounted into the containers, the API reloads on change, the
+# database is reachable on localhost:5432 and the API docs are enabled.
+#
+# COOKIE_SECURE stays true: with DOMAIN=localhost Caddy still serves
+# HTTPS (with a self-signed certificate), so Secure cookies work and
+# the browser behaves exactly as in production.
+services:
+  web:
+    volumes:
+      - ./frontend/site:/srv/site:ro
+
+  api:
+    command:
+      - uvicorn
+      - app.main:app
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8000"
+      - --reload
+    environment:
+      API_DOCS: "true"
+      COOKIE_SECURE: "true"
+    volumes:
+      - ./backend/app:/srv/app
+      - ./backend/migrations:/srv/migrations
+
+  db:
+    ports:
+      - "127.0.0.1:5432:5432"
