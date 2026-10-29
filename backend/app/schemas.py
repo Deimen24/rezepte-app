@@ -70,12 +70,33 @@ class StepOut(BaseModel):
 	text: str
 
 
+NUTRITION_MAX = Decimal("99999.9")
+
+
+class Nutrition(BaseModel):
+	"""Per portion; all optional."""
+	kcal: Decimal | None = Field(default=None, ge=0, le=NUTRITION_MAX)
+	protein_g: Decimal | None = Field(default=None, ge=0,
+					  le=NUTRITION_MAX)
+	carbs_g: Decimal | None = Field(default=None, ge=0, le=NUTRITION_MAX)
+	fat_g: Decimal | None = Field(default=None, ge=0, le=NUTRITION_MAX)
+
+	@field_serializer("kcal", "protein_g", "carbs_g", "fat_g")
+	def ser_amount(self, value):
+		return amount_to_str(value)
+
+	def is_empty(self) -> bool:
+		return all(v is None for v in (self.kcal, self.protein_g,
+					       self.carbs_g, self.fat_g))
+
+
 class VersionIn(BaseModel):
 	title: str = Field(min_length=1, max_length=NAME_LEN)
 	intro: str = ""
 	servings: int | None = Field(default=None, ge=0)
 	prep_minutes: int | None = Field(default=None, ge=0)
 	cook_minutes: int | None = Field(default=None, ge=0)
+	nutrition: Nutrition = Nutrition()
 	ingredients: list[IngredientIn] = []
 	steps: list[StepIn] = []
 
@@ -95,8 +116,23 @@ class VersionOut(BaseModel):
 	servings: int | None = None
 	prep_minutes: int | None = None
 	cook_minutes: int | None = None
+	nutrition: Nutrition = Nutrition()
 	ingredients: list[IngredientOut] = []
 	steps: list[StepOut] = []
+
+	@model_validator(mode="before")
+	@classmethod
+	def nutrition_from_columns(cls, value):
+		"""ORM rows carry the four columns flat."""
+		if isinstance(value, dict) or not hasattr(value, "kcal"):
+			return value
+		data = {k: getattr(value, k) for k in (
+			"title", "intro", "servings", "prep_minutes",
+			"cook_minutes", "ingredients", "steps")}
+		data["nutrition"] = Nutrition(
+			kcal=value.kcal, protein_g=value.protein_g,
+			carbs_g=value.carbs_g, fat_g=value.fat_g)
+		return data
 
 
 class Source(BaseModel):
@@ -275,6 +311,7 @@ class ImportVersion(BaseModel):
 	servings: int | None = None
 	prep_minutes: int | None = None
 	cook_minutes: int | None = None
+	nutrition: Nutrition = Nutrition()
 	ingredients: list[ParsedIngredient]
 	steps: list[StepIn]
 
@@ -283,7 +320,7 @@ class ImportPreview(BaseModel):
 	source: Source
 	version: ImportVersion
 	image_url: str | None
-	method: Literal["jsonld", "heuristic"]
+	method: Literal["jsonld", "heuristic", "ocr"]
 	warnings: list[str]
 
 
@@ -293,3 +330,84 @@ class IngredientLinesIn(BaseModel):
 
 class PhotoUrlIn(BaseModel):
 	url: str = Field(min_length=1, max_length=IMPORT_URL_MAX)
+
+
+class ShareOut(BaseModel):
+	token: str | None
+	path: str | None
+
+
+class SharedRecipe(BaseModel):
+	"""Public view: own version only, no notes, no original."""
+	title: str
+	category: str | None
+	tags: list[str]
+	own: VersionOut
+	photos: list[str]
+
+
+class ShoppingItemIn(BaseModel):
+	name: str = Field(min_length=1, max_length=NAME_LEN)
+	unit: str = Field(default="", max_length=UNIT_LEN)
+	amount: Decimal | None = None
+	note: str = Field(default="", max_length=NAME_LEN)
+
+	@field_validator("name", "unit", "note", mode="before")
+	@classmethod
+	def strip_text(cls, value):
+		if value is None:
+			return ""
+		return value.strip() if isinstance(value, str) else value
+
+
+class ShoppingItemOut(BaseModel):
+	model_config = ConfigDict(from_attributes=True)
+
+	id: int
+	name: str
+	unit: str
+	amount: Decimal | None
+	note: str
+	checked: bool
+	recipe_id: int | None
+
+	@field_serializer("amount")
+	def ser_amount(self, value):
+		return amount_to_str(value)
+
+
+class ShoppingFromRecipeIn(BaseModel):
+	"""factor scales the amounts, e.g. 2 portions of a 4-portion recipe
+	is 0.5."""
+	factor: Decimal = Field(default=Decimal(1), gt=0, le=100)
+
+
+class CheckedIn(BaseModel):
+	checked: bool
+
+
+class PantryIn(BaseModel):
+	name: str = Field(min_length=1, max_length=NAME_LEN)
+
+	@field_validator("name", mode="before")
+	@classmethod
+	def strip_text(cls, value):
+		return value.strip() if isinstance(value, str) else value
+
+
+class PantryOut(BaseModel):
+	model_config = ConfigDict(from_attributes=True)
+
+	id: int
+	name: str
+
+
+class TodoStatus(BaseModel):
+	configured: bool
+	logged_in: bool
+	list_name: str
+
+
+class TodoPushOut(BaseModel):
+	added: int
+	skipped: int

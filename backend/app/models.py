@@ -27,6 +27,7 @@ from sqlalchemy.orm import (
 NAME_LEN = 200
 UNIT_LEN = 50
 FILENAME_LEN = 255
+TOKEN_LEN = 64
 
 
 class Base(DeclarativeBase):
@@ -106,6 +107,8 @@ class Recipe(Base):
 	source_book: Mapped[str | None] = mapped_column(String(NAME_LEN))
 	source_page: Mapped[str | None] = mapped_column(String(UNIT_LEN))
 	favorite: Mapped[bool] = mapped_column(Boolean, default=False)
+	share_token: Mapped[str | None] = mapped_column(
+		String(TOKEN_LEN), unique=True)
 	created_at: Mapped[datetime] = mapped_column(
 		DateTime(timezone=True), server_default=func.now())
 	updated_at: Mapped[datetime] = mapped_column(
@@ -158,6 +161,10 @@ class RecipeVersion(Base):
 	servings: Mapped[int | None] = mapped_column(Integer)
 	prep_minutes: Mapped[int | None] = mapped_column(Integer)
 	cook_minutes: Mapped[int | None] = mapped_column(Integer)
+	kcal: Mapped[Decimal | None] = mapped_column(Numeric(8, 1))
+	protein_g: Mapped[Decimal | None] = mapped_column(Numeric(8, 1))
+	carbs_g: Mapped[Decimal | None] = mapped_column(Numeric(8, 1))
+	fat_g: Mapped[Decimal | None] = mapped_column(Numeric(8, 1))
 	created_at: Mapped[datetime] = mapped_column(
 		DateTime(timezone=True), server_default=func.now())
 	updated_at: Mapped[datetime] = mapped_column(
@@ -239,3 +246,36 @@ class Photo(Base):
 		DateTime(timezone=True), server_default=func.now())
 
 	recipe: Mapped["Recipe"] = relationship(back_populates="photos")
+
+
+class ShoppingItem(Base):
+	__tablename__ = "shopping_items"
+
+	id: Mapped[int] = mapped_column(primary_key=True)
+	name: Mapped[str] = mapped_column(String(NAME_LEN))
+	unit: Mapped[str] = mapped_column(String(UNIT_LEN), default="")
+	amount: Mapped[Decimal | None] = mapped_column(Numeric(10, 3))
+	note: Mapped[str] = mapped_column(String(NAME_LEN), default="")
+	checked: Mapped[bool] = mapped_column(Boolean, default=False)
+	recipe_id: Mapped[int | None] = mapped_column(
+		ForeignKey("recipes.id", ondelete="SET NULL"))
+	created_at: Mapped[datetime] = mapped_column(
+		DateTime(timezone=True), server_default=func.now())
+
+
+class PantryItem(Base):
+	__tablename__ = "pantry"
+
+	id: Mapped[int] = mapped_column(primary_key=True)
+	name: Mapped[str] = mapped_column(String(NAME_LEN), unique=True)
+
+
+class Integration(Base):
+	__tablename__ = "integrations"
+
+	id: Mapped[int] = mapped_column(primary_key=True)
+	name: Mapped[str] = mapped_column(String(NAME_LEN), unique=True)
+	data: Mapped[str] = mapped_column(Text, default="")
+	updated_at: Mapped[datetime] = mapped_column(
+		DateTime(timezone=True), server_default=func.now(),
+		onupdate=func.now())

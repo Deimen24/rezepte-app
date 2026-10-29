@@ -88,7 +88,7 @@ def test_upgrade_records_head_revision(migrated):
 	with migrated.connect() as conn:
 		rows = conn.execute(text("SELECT version_num FROM %s"
 					 % VERSION_TABLE)).all()
-	assert rows == [("0001",)]
+	assert rows == [("0002",)]
 
 
 @pytest.mark.parametrize("table", sorted(Base.metadata.tables))

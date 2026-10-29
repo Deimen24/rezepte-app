@@ -19,7 +19,7 @@ LIST_ITEM_KEYS = {"id", "title", "category", "tags", "favorite",
 NOTE_KEYS = {"id", "created_at", "text"}
 COOK_LOG_KEYS = {"id", "cooked_on", "rating", "comment"}
 PHOTO_KEYS = {"id", "url", "thumb_url", "is_own_result", "created_at"}
-VERSION_KEYS = {"title", "intro", "servings", "prep_minutes",
+VERSION_KEYS = {"title", "intro", "servings", "prep_minutes", "nutrition",
 		"cook_minutes", "ingredients", "steps"}
 INGREDIENT_KEYS = {"amount", "unit", "name", "note"}
 STEP_KEYS = {"text"}
