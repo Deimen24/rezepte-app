@@ -85,7 +85,7 @@ Reserviert für Phase 2 (nicht gebaut): `/api/recipes/{id}/notes`,
 Tests grün, `docker compose config` gültig, Caddyfile validiert,
 Stack gestartet, Rezept über die Oberfläche angelegt.
 
-## Phase 2 – Küche (Plan, wartet auf OK)
+## Phase 2 – Küche (gebaut, Stack-Start auf dem Server offen)
 
 ### Dateien
     backend/requirements.txt: + pillow
@@ -146,5 +146,12 @@ Keine neue Migration: `notes`, `cook_log`, `photos` sind seit 0001 da.
 Service und API je Endpunkt, Bildverkleinerung (Grösse, Drehung, kein
 EXIF), Export-ZIP (Inhalt, Fotos dabei), Löschen räumt Dateien weg,
 Fehlerfälle (fremde Rezept-ID, zu grosse Datei, kein Bild).
+
+### Stand 29.10.
+- Backend und Frontend gebaut; 318 Tests grün; Caddyfile validiert.
+- Oberfläche in Playwright geprüft: Favorit, Fotos (Upload, Overlay,
+  Löschen), Notizen, Kochlog, Kochmodus (Wake Lock, Abhaken, Schritte,
+  Stand nach Reload), Export-Link.
+- Offen: Stack-Start beim Betreiber, Foto-Upload vom echten iPhone.
 
 ## Phase 3 – Import (offen)
