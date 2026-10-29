@@ -2,9 +2,9 @@
 
 from pathlib import Path
 
-MEDIA_URL_PREFIX = "/media/"
-
 from app.config import settings
+
+MEDIA_URL_PREFIX = "/media/"
 
 
 def _root() -> Path:
