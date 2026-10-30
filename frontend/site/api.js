@@ -11,7 +11,8 @@
 const API_BASE = "/api";
 const LOGIN_PATH = "/auth/login";
 /* Paths that work without a session: a 401 there is not a logout. */
-const PUBLIC_PREFIXES = [LOGIN_PATH, "/share/"];
+const SETUP_PATH = "/auth/setup";
+const PUBLIC_PREFIXES = [LOGIN_PATH, SETUP_PATH, "/share/"];
 
 export const UNAUTHORIZED_EVENT = "api:unauthorized";
 
@@ -93,6 +94,16 @@ function query(params)
 export function login(username, password)
 {
 	return api("POST", LOGIN_PATH, { username, password });
+}
+
+export function setup_state()
+{
+	return api("GET", SETUP_PATH);
+}
+
+export function setup(username, password)
+{
+	return api("POST", SETUP_PATH, { username, password });
 }
 
 export function logout()

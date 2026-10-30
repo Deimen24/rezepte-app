@@ -59,8 +59,8 @@ docker compose up -d --build
 ```
 
 Baut die Images und startet im Hintergrund. App: `http://SERVER-IP:8080`
-(`HTTP_PORT` in `.env`). Dann Benutzer anlegen, siehe «Benutzer
-anlegen».
+(`HTTP_PORT` in `.env`). Beim ersten Öffnen Benutzername und
+Passwort festlegen; das ist der einzige Benutzer.
 
 ## NPM
 
@@ -74,20 +74,15 @@ docker compose up -d api
 
 Startet `api` neu. Anmeldung danach nur noch über HTTPS.
 
-## Benutzer anlegen (Pflicht vor der ersten Anmeldung)
+## Benutzer
 
-Es gibt keinen vorgegebenen Benutzer. `NAME` frei wählen:
-
-```bash
-docker compose exec api python -m app.cli create-user NAME
-```
-
-Fragt zweimal nach einem neuen Passwort. Anmeldung im Browser mit
-`NAME` und diesem Passwort.
+Angelegt beim ersten Öffnen im Browser. Passwort vergessen:
 
 ```bash
 docker compose exec api python -m app.cli set-password NAME
 ```
+
+Fragt zweimal nach dem neuen Passwort.
 
 ```bash
 docker compose exec api python -m app.cli purge-sessions

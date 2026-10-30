@@ -26,17 +26,6 @@ def read_password() -> str:
 	return pw
 
 
-def cmd_create_user(args) -> None:
-	pw = read_password()
-	with SessionLocal() as db:
-		try:
-			auth_service.create_user(db, args.username, pw)
-		except ValueError:
-			sys.exit("Fehler: Benutzer '%s' existiert bereits."
-				 % args.username)
-	print("Benutzer '%s' angelegt." % args.username)
-
-
 def cmd_set_password(args) -> None:
 	pw = read_password()
 	with SessionLocal() as db:
@@ -72,10 +61,6 @@ def build_parser() -> argparse.ArgumentParser:
 	p = argparse.ArgumentParser(prog="python -m app.cli",
 				    description="Verwaltung der Rezepte-App")
 	sub = p.add_subparsers(dest="command", required=True)
-
-	c = sub.add_parser("create-user", help="Benutzer anlegen")
-	c.add_argument("username")
-	c.set_defaults(func=cmd_create_user)
 
 	s = sub.add_parser("set-password", help="Passwort setzen")
 	s.add_argument("username")

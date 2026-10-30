@@ -43,36 +43,19 @@ def run(argv) -> None:
 	cli.main(argv)
 
 
-def test_create_user_then_login_works(cli_db, capsys):
-	run(["create-user", USER])
-	assert "'%s' angelegt" % USER in capsys.readouterr().out
-	assert cli_db.scalars(select(User.username)).all() == [USER]
-	assert auth_service.login(cli_db, USER, PASSWORD) is not None
-	assert auth_service.login(cli_db, USER, "falsch") is None
+def seed_user(db):
+	auth_service.create_user(db, USER, PASSWORD)
 
 
-def test_create_user_stores_hash_not_password(cli_db):
-	run(["create-user", USER])
-	user = cli_db.scalar(select(User))
-	assert PASSWORD not in user.password_hash
-	assert auth.verify_password(user.password_hash, PASSWORD)
-
-
-def test_duplicate_create_user_exits_nonzero(cli_db, capsys):
-	run(["create-user", USER])
+def test_create_user_command_is_gone(cli_db):
 	with pytest.raises(SystemExit) as exc:
 		run(["create-user", USER])
-	# sys.exit(message) prints the message and exits with status 1.
-	assert exc.value.code not in (0, None)
-	assert USER in str(exc.value.code)
-	assert "existiert bereits" in str(exc.value.code)
-	assert cli_db.scalar(select(User.username).where(
-		User.username == USER)) == USER
-	assert len(cli_db.scalars(select(User)).all()) == 1
+	assert exc.value.code == 2
+	assert cli_db.scalars(select(User)).all() == []
 
 
 def test_set_password_changes_password(cli_db, monkeypatch):
-	run(["create-user", USER])
+	seed_user(cli_db)
 	monkeypatch.setenv(cli.PASSWORD_ENV, "neu")
 	run(["set-password", USER])
 	assert auth_service.login(cli_db, USER, PASSWORD) is None
@@ -87,7 +70,7 @@ def test_set_password_unknown_user_exits_nonzero(cli_db):
 
 
 def test_purge_sessions_removes_only_expired(cli_db, capsys):
-	run(["create-user", USER])
+	seed_user(cli_db)
 	old = auth_service.login(cli_db, USER, PASSWORD)
 	fresh = auth_service.login(cli_db, USER, PASSWORD)
 	sess = cli_db.scalar(select(Session).where(
@@ -113,7 +96,8 @@ def test_password_from_env_skips_prompt(cli_db, monkeypatch):
 		raise AssertionError("getpass must not be called")
 
 	monkeypatch.setattr(cli.getpass, "getpass", no_prompt)
-	run(["create-user", USER])
+	seed_user(cli_db)
+	run(["set-password", USER])
 	assert auth_service.login(cli_db, USER, PASSWORD) is not None
 
 
@@ -122,10 +106,11 @@ def test_password_prompt_mismatch_exits(cli_db, monkeypatch):
 	answers = iter(["eins", "zwei"])
 	monkeypatch.setattr(cli.getpass, "getpass",
 			    lambda prompt: next(answers))
+	seed_user(cli_db)
 	with pytest.raises(SystemExit) as exc:
-		run(["create-user", USER])
+		run(["set-password", USER])
 	assert "stimmen nicht" in str(exc.value.code)
-	assert cli_db.scalars(select(User)).all() == []
+	assert auth_service.login(cli_db, USER, PASSWORD) is not None
 
 
 def test_missing_command_exits_with_usage_error(cli_db):

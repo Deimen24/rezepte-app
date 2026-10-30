@@ -241,21 +241,17 @@ function view_error(e)
 /* Login                                                               */
 /* ------------------------------------------------------------------ */
 
-function view_login()
+const MIN_PASSWORD_LEN = 8;
+
+function login_form(title, submit_label, fields, on_submit)
 {
-	const user = h("input", { name: "username", autocomplete: "username",
-				  autocapitalize: "none", required: true,
-				  autofocus: true });
-	const pass = h("input", { name: "password", type: "password",
-				  autocomplete: "current-password",
-				  required: true });
 	const btn = h("button", { type: "submit", class: "btn-primary" },
-		      "Anmelden");
+		      submit_label);
 	const form = h("form", { class: "login", onsubmit: async (ev) => {
 		ev.preventDefault();
 		btn.disabled = true;
 		try {
-			await API.login(user.value.trim(), pass.value);
+			await on_submit();
 			state.user = await API.me();
 			navigate("#/");
 		} catch (e) {
@@ -263,11 +259,59 @@ function view_login()
 			btn.disabled = false;
 		}
 	} },
-		h("h1", {}, "Rezepte"),
-		field("Benutzername", user),
-		field("Passwort", pass),
+		h("h1", {}, title),
+		fields,
 		h("div", { class: "actions" }, btn));
 	return h("main", {}, form);
+}
+
+function name_input(autocomplete)
+{
+	return h("input", { name: "username", autocomplete: autocomplete,
+			    autocapitalize: "none", required: true,
+			    autofocus: true });
+}
+
+function password_input(name, autocomplete)
+{
+	return h("input", { name: name, type: "password",
+			    autocomplete: autocomplete, required: true });
+}
+
+/* First use: no user exists yet, create it from the browser. */
+function view_setup()
+{
+	const user = name_input("username");
+	const pass = password_input("password", "new-password");
+	pass.minLength = MIN_PASSWORD_LEN;
+	const again = password_input("again", "new-password");
+	return login_form("Benutzer anlegen", "Anlegen", [
+		field("Benutzername", user),
+		field("Passwort (mind. 8 Zeichen)", pass),
+		field("Passwort wiederholen", again),
+	], async () => {
+		if (pass.value !== again.value)
+			throw new Error("Passwörter stimmen nicht überein");
+		await API.setup(user.value.trim(), pass.value);
+	});
+}
+
+async function view_login()
+{
+	let needed = false;
+	try {
+		needed = (await API.setup_state()).needed;
+	} catch (e) {
+		/* API unreachable: the login form shows the error. */
+	}
+	if (needed)
+		return view_setup();
+	const user = name_input("username");
+	const pass = password_input("password", "current-password");
+	return login_form("Rezepte", "Anmelden", [
+		field("Benutzername", user),
+		field("Passwort", pass),
+	], () => API.login(user.value.trim(), pass.value));
 }
 
 async function logout()

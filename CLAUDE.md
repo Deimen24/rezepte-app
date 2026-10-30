@@ -27,7 +27,9 @@ arbeitet ca. 1 Stunde pro Woche daran und hat wenig Docker-Erfahrung.
 - Geschäftslogik in `backend/app/services/`, Router dünn.
 - Jede Datenmodell-Änderung als Alembic-Migration, nie `create_all`.
 - Keine Abhängigkeiten ohne gepinnte Version, keine Alpha-Versionen.
-- Alle Endpunkte ausser Login und Health erfordern Login.
+- Alle Endpunkte ausser Login, Ersteinrichtung, Health und
+  Teilen-Links erfordern Login. Der Benutzer entsteht beim ersten
+  Öffnen im Browser, nicht per CLI.
 
 ## Sprache
 - Code, Kommentare, Commit-Texte: Englisch.

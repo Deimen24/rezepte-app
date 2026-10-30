@@ -11,6 +11,10 @@ def get_user(db: DbSession, username: str) -> User | None:
 	return db.scalar(select(User).where(User.username == username))
 
 
+def has_users(db: DbSession) -> bool:
+	return db.scalar(select(User.id).limit(1)) is not None
+
+
 def create_user(db: DbSession, username: str, password: str) -> User:
 	"""Raise ValueError if the username is already taken."""
 	if get_user(db, username) is not None:

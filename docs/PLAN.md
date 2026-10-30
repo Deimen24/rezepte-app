@@ -337,3 +337,10 @@ Speichern läuft über das bestehende `POST /api/recipes` mit
 - Offen: Stack-Start beim Betreiber, Docker-Build mit tesseract,
   echter To-Do-Lauf gegen Microsoft Graph, Share Target auf einem
   echten Android.
+
+## Änderung 30.10.: Ersteinrichtung im Browser
+- Kein `create-user` mehr in der CLI. `GET /api/auth/setup` meldet
+  `{needed}`, `POST /api/auth/setup` legt den einzigen Benutzer an
+  (409, sobald einer existiert; Passwort mind. 8 Zeichen) und meldet
+  an. Login-Ansicht zeigt bei `needed` das Formular «Benutzer anlegen».
+- `set-password` und `purge-sessions` bleiben in der CLI.
