@@ -21,7 +21,24 @@ Teilen per Link; Buchseite per Foto; Teilen aus dem Handy-Browser.
 
 ## Installation
 
-Server mit Docker Engine 24+ und `git`.
+Server mit Docker Engine 24+ (Compose-Plugin) und `git`. Prüfen:
+
+```bash
+docker compose version
+```
+
+Fehlt der Befehl oder gibt es nur `docker-compose` (mit Bindestrich),
+Docker von docker.com installieren:
+
+```bash
+curl -fsSL https://get.docker.com | sh
+```
+
+Danach den eigenen Benutzer freischalten (neu anmelden):
+
+```bash
+sudo usermod -aG docker $USER
+```
 
 ```bash
 git clone <URL-dieses-Repositories> rezepte-app
