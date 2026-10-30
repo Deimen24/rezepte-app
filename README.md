@@ -73,13 +73,16 @@ docker compose up -d api
 
 Startet `api` neu. Anmeldung danach nur noch über HTTPS.
 
-## Benutzer
+## Benutzer anlegen (Pflicht vor der ersten Anmeldung)
+
+Es gibt keinen vorgegebenen Benutzer. `NAME` frei wählen:
 
 ```bash
 docker compose exec api python -m app.cli create-user NAME
 ```
 
-Fragt das Passwort ab.
+Fragt zweimal nach einem neuen Passwort. Anmeldung im Browser mit
+`NAME` und diesem Passwort.
 
 ```bash
 docker compose exec api python -m app.cli set-password NAME
