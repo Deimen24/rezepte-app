@@ -59,7 +59,8 @@ docker compose up -d --build
 ```
 
 Baut die Images und startet im Hintergrund. App: `http://SERVER-IP:8080`
-(`HTTP_PORT` in `.env`).
+(`HTTP_PORT` in `.env`). Dann Benutzer anlegen, siehe «Benutzer
+anlegen».
 
 ## NPM
 
