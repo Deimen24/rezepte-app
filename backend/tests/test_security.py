@@ -165,3 +165,20 @@ def test_health_needs_no_cookie_and_sets_none(client):
 	resp = client.get("/api/health")
 	assert resp.status_code == 200
 	assert "set-cookie" not in resp.headers
+
+
+def test_overlong_password_is_rejected(client, db):
+	auth_service.create_user(db, TEST_USER, TEST_PASSWORD)
+	resp = client.post(LOGIN, json={"username": TEST_USER,
+					"password": "a" * 5000})
+	assert resp.status_code == 422
+	assert db.scalars(select(Session)).all() == []
+
+
+def test_unknown_user_still_spends_verify_time(client, db):
+	# The dummy verify must run so timing does not reveal the user.
+	auth_service.create_user(db, TEST_USER, TEST_PASSWORD)
+	resp = client.post(LOGIN, json={"username": "nobody",
+					"password": "x"})
+	assert resp.status_code == 401
+	assert auth.spend_verify_time("x") is None

@@ -16,18 +16,20 @@ WRONG_CREDENTIALS = "wrong credentials"
 SETUP_DONE = "setup already done"
 MIN_PASSWORD_LEN = 8
 MAX_NAME_LEN = 200
+MAX_PASSWORD_LEN = 1024
 
 router = APIRouter(prefix="/auth")
 
 
 class LoginInput(BaseModel):
-	username: str
-	password: str
+	username: str = Field(max_length=MAX_NAME_LEN)
+	password: str = Field(max_length=MAX_PASSWORD_LEN)
 
 
 class SetupInput(BaseModel):
 	username: str = Field(min_length=1, max_length=MAX_NAME_LEN)
-	password: str = Field(min_length=MIN_PASSWORD_LEN)
+	password: str = Field(min_length=MIN_PASSWORD_LEN,
+			      max_length=MAX_PASSWORD_LEN)
 
 	@field_validator("username", mode="before")
 	@classmethod

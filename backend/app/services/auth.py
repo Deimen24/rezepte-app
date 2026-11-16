@@ -40,6 +40,7 @@ def login(db: DbSession, username: str, password: str) -> str | None:
 	"""Return a raw session token, or None on wrong credentials."""
 	user = get_user(db, username)
 	if user is None:
+		auth.spend_verify_time(password)
 		return None
 	if not auth.verify_password(user.password_hash, password):
 		return None
